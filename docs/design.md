@@ -61,7 +61,50 @@
 - P で一時停止（プレイ中のみ）。Esc は全画面共通でウィンドウを閉じる（一時停止には使わない）。一時停止中は `update_play` を呼ばず、見た目の更新も dt=0 にして、時間・警備員・回転を全部止める。受け付けるのは P（再開）・R・M・F・Esc だけ。
 - ベストタイムは難易度ごとに `records.py` でプロジェクトのフォルダの `saves/records.json` に保存する（場所が分かりやすいように。`.gitignore` の `saves/` で GitHub には上げない）。pyproject.toml が見つからない（フォルダの外にインストールされた）ときは、ユーザーのデータフォルダに保存する。環境変数 `STEALTH_GAME_DATA_DIR` で保存先を変えられる（テストは一時フォルダを使う）。同じタイムは新記録にしない。
 
+### 音（`app/audio.py`。素材はすべて魔王魂）
+- ファイルは `src/stealth_game/assets/sounds/` に、下の表のファイル名で置く（ogg）。ないファイルは鳴らさないだけで、ゲームは動く。
+  - BGMはループ版を使う。ループ版はダウンロードすると日本語のファイル名になるので、表の英字の名前に変える（通常版は最後に2〜3秒の無音があり、タイトル・追跡の曲は終わりで小さくなっていくので、繰り返すと途切れる）。
+- クレジットは魔王魂の規約で必要。難易度選択の画面の右下（「音楽・効果音：魔王魂」）と README に出している。
+- GitHub のリポジトリを公開するときは、音のファイルを一緒に上げてよいか（曲単品の再配布に当たらないか）を規約で確認し直す。
+
+| 場面 | ファイル | 素材のページ |
+|---|---|---|
+| BGM：タイトル・難易度選択 | maou_loop_bgm_cyber19.ogg | https://maou.audio/bgm_cyber19/ （ループ版） |
+| BGM：潜入中 | maou_loop_bgm_cyber08.ogg | https://maou.audio/bgm_cyber08/ （ループ版） |
+| BGM：追跡中・全回収後の狩り | maou_loop_bgm_neorock80.ogg | https://maou.audio/bgm_neorock80/ （ループ版） |
+| クリア | maou_game_jingle02.ogg | https://maou.audio/game_jingle02/ |
+| ゲームオーバー | maou_se_jingle13.ogg | https://maou.audio/se_jingle13/ |
+| 新記録（クリアの後に続ける） | maou_game_jingle09.ogg | https://maou.audio/game_jingle09/ |
+| 走る足音（くり返し） | maou_se_sound_footstep02.ogg | https://maou.audio/se_sound_footstep02/ |
+| 「！」 | maou_se_sound_whistle01.ogg | https://maou.audio/se_sound_whistle01/ |
+| アイテムを拾う（8個目も同じ） | maou_se_system49.ogg | https://maou.audio/se_system49/ |
+| 出口が開く | maou_se_onepoint02.ogg | https://maou.audio/se_onepoint02/ |
+| 安全地帯の扉が閉まる | maou_se_sound_door02.ogg | https://maou.audio/se_sound_door02/ |
+| 捕まる | maou_se_onepoint06.ogg | https://maou.audio/se_onepoint06/ |
+| お助けアイテムが現れた | maou_se_onepoint08.ogg | https://maou.audio/se_onepoint08/ |
+| お助けアイテムを拾う | maou_se_onepoint26.ogg | https://maou.audio/se_onepoint26/ |
+| 透明化の残り2秒（くり返し） | maou_se_sound_noise01.ogg | https://maou.audio/se_sound_noise01/ |
+| スタンを使う | maou_se_magic_thunder01.ogg | https://maou.audio/se_magic_thunder01/ |
+| 音の罠を置く | maou_se_sound_switch01.ogg | https://maou.audio/se_sound_switch01/ |
+| 音の罠が鳴る | maou_se_battle_explosion03.ogg | https://maou.audio/se_battle_explosion03/ |
+| お助けアイテムを使えなかった | maou_se_onepoint14.ogg | https://maou.audio/se_onepoint14/ |
+| メニューのカーソル移動 | maou_se_system34.ogg | https://maou.audio/se_system34/ |
+| 難易度の決定 | maou_se_system13.ogg | https://maou.audio/se_system13/ |
+
+- 鳴らさない（無音と決めた）場面: 警備員が調べに来る・応援を呼ぶ・見回りに戻る・近くの警備員の足音、狩りが始まる、透明化を使う・切れる、音の罠のカウント。
+- 鼓動（警戒度が上がっているとき）は一度入れたが、BGMに負けて聞こえず、警戒度メーターの変化も速いので不要として外した（2026-11-03）。
+- BGM: 誰かが追跡中（スタン中は除く）か、全回収後の狩りの間は追跡の曲。追跡が終わっても3秒は追跡の曲のまま（すぐ切り替わらないように）。潜入の曲に戻るときは続きから流す。一時停止中は止め、再開で続きから。クリア・ゲームオーバーで止める。
+  捕まったら（ライフが残っていても）、流れている曲にかかわらず一旦止め、スタート部屋に戻ったら潜入の曲の続きから流す。
+- BGMは `audio-preload-threshold` を大きくして、ファイルを全部メモリに読み込んでから流す（3曲で約55MB）。Panda3Dの少しずつ読み込む流し方（ストリーミング）だと、曲の終わりで頭に戻ったあと最初の0.7秒ほどをくり返してしまい、ループしなかった。
+- 透明化の残り2秒: ノイズを小さい音量（2割）から始めて、切れる瞬間に元の音量まで大きくする。
+- 捕まってゲームオーバーのときは、捕まる音の1.5秒後にゲームオーバーのジングル（捕まる音は2.8秒で、大きいのは最初の1.5秒）。画面も音に合わせて「捕まった... 残りライフ 0」→（ジングルと同時に）「ゲームオーバー」に切り替える。
+- 新記録のジングルは、クリアのジングルの4.0秒後に始める（クリアのジングルは6.5秒あるが、最後の2秒ほどは無音と余韻）。画面も「ミッション成功！ (タイム)」→（ジングルと同時に）「新記録！」に切り替える。新記録でないときは「ミッション成功！ (タイム)」と操作の案内だけを出す（ベストタイムは出さない）。
+- 音の罠を置く音は、音が鳴っているのが最初の0.1秒（カチッ）だけで短いので、音量を最大にしている。
+- 音量は、各ファイルの音のある部分の平均の大きさを測って揃えた（BGMは-19dB前後、効果音は-20dB前後）。ループ版のBGMは通常版より1dBほど小さいので、ループ版で測った値にしてある。ループ版のつなぎ目は3曲とも途切れない（潜入の曲だけ、最後に0.2秒ほど音が消えていく区切りがあるが、曲の作りとして入っているもので削らない）。足音とお助けアイテムの出現は元の音が小さく、音量を最大にしてもほかより小さい。
+- 「使えなかった」は、その難易度で出るお助けアイテムのキーを押したのに、持っていない・透明化中・安全地帯の中で使えなかったとき。
+
 ### 画面・テキスト
+- 「！」は中間・近い視点では大きく映って邪魔になるので、少し透かす（`EXCLAIM_FOLLOW_ALPHA`）。全体表示では透かさない。
 - ウィンドウ名は "Stealth Game"。
 - 日本語フォントが見つからない環境では英語表示。文言は`texts.py`の`TEXTS["ja"/"en"]`にまとまっている。
 
@@ -88,6 +131,7 @@
   - オフスクリーン描画は `window-type offscreen` で起動し、`base.win.saveScreenshot()` で撮れる（`bind_events` と `is_down` は差し替える）。
 - `\`キーは日本語キーボードでは「¥」（「ろ」の位置）になる。キーマッピングが想定通りか未確認。
 - 実機でのパフォーマンス（鬼16人 + 視界の扇形の描画）は未確認。
+- 音は実際の素材では未確認（試験用の音で、再生・くり返し・続きからの再生が動くことだけ確認済み）。音量のバランス、足音のくり返しの自然さ、BGMのループのつなぎ目は、実際に聴いて調整する。
 
 ## 6. 保留中の案
 - 方針として決めたが**未実装**（透明化とスタンの両方が関係する案は、今は簡単・普通だけが対象）:

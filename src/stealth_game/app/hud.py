@@ -75,6 +75,12 @@ class HudMixin:
             text=self.text["title"], pos=(0, 0.72), scale=0.14, fg=(1, 1, 1, 1),
             shadow=(0, 0, 0, 1), bg=MENU_TEXT_BG, font=self.font,
         )
+        # 素材のクレジット（魔王魂の利用規約で表記が必要）。難易度選択の画面の右下に出す
+        self.credit_text = OnscreenText(
+            text=self.text["credit"], parent=self.a2dBottomRight, pos=(-0.05, 0.1),
+            scale=0.04, fg=(0.8, 0.8, 0.8, 1), shadow=(0, 0, 0, 1),
+            align=TextNode.ARight, font=self.font,
+        )
         self.menu_text = OnscreenText(
             text="", pos=(0, 0.46), scale=0.05, fg=(1, 1, 1, 1),
             shadow=(0, 0, 0, 1), bg=MENU_TEXT_BG, mayChange=True, font=self.font,

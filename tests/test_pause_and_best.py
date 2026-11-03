@@ -81,7 +81,10 @@ def win(game, elapsed):
     """クリアさせて、そのときに出た文字を返す。"""
     game.elapsed = elapsed
     game.message_text.setText.reset_mock()
+    game.taskMgr.doMethodLater.reset_mock()
     game.on_win()
+    for call in game.taskMgr.doMethodLater.call_args_list:  # 新記録の表示（ジングルと同時）まで進める
+        call.args[1](None)
     return "\n".join(written_texts(game))
 
 
@@ -94,8 +97,7 @@ def test_best_time_is_saved_and_shown(game_class):
 
     game.start_game(HARD)
     message = win(game, 250.0)
-    assert game.text["new_record"] not in message
-    assert game.text["best_record"].format(time=200.0) in message
+    assert message == game.text["win_done"].format(time=250.0), "新記録でないときは、タイムと操作だけ"
     assert load_records(records_path()) == {"hard": 200.0}, "遅いタイムでは書き換えない"
 
     game.start_game(HARD)

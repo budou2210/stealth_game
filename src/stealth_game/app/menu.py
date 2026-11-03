@@ -38,10 +38,12 @@ class MenuMixin:
     def open_menu(self):
         self.state = "menu"
         self.camera_mode = "overview"
+        self.reset_audio()
         self.clear_placed_decoys()
         self.message_text.setText("")
         self.menu_title.show()
         self.menu_text.show()
+        self.credit_text.show()
         self.set_play_hud_visible(False)
         self.update_menu_text()
 
@@ -49,6 +51,7 @@ class MenuMixin:
         if self.state != "menu":
             return
         self.menu_index = (self.menu_index + step) % len(DIFFICULTIES)
+        self.play_sound("cursor")
         self.update_menu_text()
 
     def choose_difficulty(self, index):
@@ -56,4 +59,5 @@ class MenuMixin:
             return
         if index is not None:
             self.menu_index = index
+        self.play_sound("confirm")
         self.start_game(DIFFICULTIES[self.menu_index])

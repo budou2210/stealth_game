@@ -41,6 +41,7 @@ from ..theme import (
     EXCLAIM_BLINK_COLOR,
     EXCLAIM_CARD_COLOR,
     EXCLAIM_COLOR,
+    EXCLAIM_FOLLOW_ALPHA,
     EXCLAIM_FRAME_COLOR,
     FLASH_PICKUP_COLOR,
     NOISE_BIN,
@@ -144,6 +145,7 @@ class VisualsMixin:
         exclaim_np = self.render.attachNewNode(exclaim)
         exclaim_np.setBillboardPointEye()
         exclaim_np.setLightOff()
+        exclaim_np.setTransparency(TransparencyAttrib.MAlpha)
         exclaim_np.setDepthTest(False)
         exclaim_np.setDepthWrite(False)
         exclaim_np.setBin("fixed", 10)
@@ -217,9 +219,11 @@ class VisualsMixin:
         node.setPos(guard.x, guard.y, 2.0 + 0.15 * math.sin(age * 12))
         if self.is_overview():
             base_size = EXCLAIM_OVERVIEW_SIZE
-        else:
+            node.setAlphaScale(1.0)
+        else:  # 中間・近い視点では大きく映って邪魔になるので、少し透かす
             distance = (self.cam_pos - Vec3(guard.x, guard.y, 2.0)).length()
             base_size = EXCLAIM_SCREEN_SIZE * distance
+            node.setAlphaScale(EXCLAIM_FOLLOW_ALPHA)
         node.setScale(exclaim_scale(age, base_size))
         blink = age < EXCLAIM_BLINK_TIME and int(age * 12) % 2 == 1
         view["exclaim_text"].setTextColor(*(EXCLAIM_BLINK_COLOR if blink else EXCLAIM_COLOR))

@@ -33,6 +33,7 @@ from ..records import load_records, records_path, save_records, update_best
 from ..render.meshes import build_level_node, make_unit_box
 from ..theme import INITIAL_CAMERA_LOOK, INITIAL_CAMERA_POS
 from ..world import World
+from .audio import AUDIO_PRELOAD_THRESHOLD, LOSE_JINGLE_DELAY, NEW_RECORD_DELAY, AudioMixin
 from .camera import CameraMixin
 from .helpers import HelperMixin
 from .hud import HudMixin
@@ -42,10 +43,11 @@ from .visuals import VisualsMixin
 
 
 class StealthGame(
-    InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, HelperMixin, ShowBase
+    InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, HelperMixin, AudioMixin, ShowBase
 ):
     def __init__(self):
         loadPrcFileData("", "window-title Stealth Game\nwin-size 1100 800")
+        loadPrcFileData("", f"audio-preload-threshold {AUDIO_PRELOAD_THRESHOLD}")
         super().__init__()
         self.disableMouse()
         self.setBackgroundColor(0.04, 0.05, 0.08)
@@ -87,6 +89,7 @@ class StealthGame(
         self.build_actors()
         self.set_doors_closed(False)
         self.setup_hud()
+        self.setup_audio()
         self.overview_cache = {}
         self.snap_camera()
 
@@ -131,7 +134,9 @@ class StealthGame(
         self.guards = self.make_guards(cfg)
         self.menu_title.hide()
         self.menu_text.hide()
+        self.credit_text.hide()
         self.set_play_hud_visible(True)
+        self.reset_audio()
         self.reset_game()
 
     def restart_game(self):
@@ -212,12 +217,20 @@ class StealthGame(
         self.lives -= 1
         if self.lives <= 0:
             self.state = "lose"
-            self.message_text.setText(self.text["lose"])
+            self.play_sound("caught")
+            self.message_text.setText(self.text["lose"].format(lives=max(0, self.lives)))
+            self.run_later(LOSE_JINGLE_DELAY, self.show_game_over)
             return
+        self.play_sound("caught")
         dropped = self.drop_items(player_cell(self.player))
         self.state = "caught"
         self.caught_timer = CAUGHT_FREEZE_TIME
         self.message_text.setText(self.text["caught"].format(lives=self.lives, dropped=dropped))
+
+    def show_game_over(self):
+        """「捕まった...」の後、ジングルと同時に「ゲームオーバー」に切り替える。"""
+        self.play_sound("lose")
+        self.message_text.setText(self.text["game_over"])
 
     def update_caught(self, dt):
         """捕まった直後は少し止まり、その後スタート部屋で復活する。"""
@@ -231,6 +244,7 @@ class StealthGame(
         p = self.player
         if not self.world.doors_closed and self.world.is_fully_outside_safe_zone(p.x, p.y, PLAYER_RADIUS):
             self.set_doors_closed(True)
+            self.play_sound("door")
         p.safe = not self.world.doors_closed and self.world.is_in_safe_zone(p.x, p.y)
 
     def remaining_item_cells(self):
@@ -283,6 +297,9 @@ class StealthGame(
             if math.hypot(self.player.x - ix, self.player.y - iy) < ITEM_PICKUP_DISTANCE:
                 self.items_collected.add(i)
                 self.collect_order.append(i)
+                self.play_sound("item")
+                if self.has_all_items():
+                    self.play_sound("exit_open")
 
     def has_all_items(self):
         return len(self.items_collected) == len(self.item_cells)
@@ -321,6 +338,7 @@ class StealthGame(
             guard.hunting = hunting and guard.is_wanderer()
             guard.update(dt, self.player)
         self.share_alerts()
+        self.play_event_sounds()
         exit_color = (0.2, 0.9, 0.3, 1) if self.has_all_items() else (0.8, 0.2, 0.2, 1)
         self.exit_np.setColor(*exit_color)
         if self.check_caught():
@@ -332,12 +350,19 @@ class StealthGame(
         """クリア。その難易度のベストタイムより速ければ記録を書き換えて保存する。"""
         self.state = "win"
         key = self.difficulty.key
+        self.stop_bgm()
+        self.play_sound("clear")
         if update_best(self.best_times, key, self.elapsed):
             save_records(self.records_file, self.best_times)
-            record = self.text["new_record"]
+            # クリアのジングルの間は「ミッション成功！」、新記録のジングルと同時に「新記録！」に切り替える
+            self.message_text.setText(self.text["win"].format(time=self.elapsed))
+            self.run_later(NEW_RECORD_DELAY, self.show_new_record)
         else:
-            record = self.text["best_record"].format(time=self.best_times[key])
-        self.message_text.setText(self.text["win"].format(time=self.elapsed, record=record))
+            self.message_text.setText(self.text["win_done"].format(time=self.elapsed))
+
+    def show_new_record(self):
+        self.play_sound("new_record")
+        self.message_text.setText(self.text["new_record"])
 
     def toggle_pause(self):
         """P：プレイ中なら一時停止、一時停止中なら再開する。"""
@@ -357,6 +382,7 @@ class StealthGame(
             self.update_caught(dt)
         frozen = self.state == "paused"
         self.update_visuals(0.0 if frozen else dt)
+        self.update_audio(0.0 if frozen else dt)
         self.update_camera(dt)
         self.update_hud()
 

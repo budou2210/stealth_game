@@ -33,6 +33,7 @@ uv run pytest
 | `tests/test_hud.py` | 操作説明・出現のお知らせ・足音の範囲の表示と設定 |
 | `tests/test_records.py` | ベストタイムの保存・読み込み・更新の判定 |
 | `tests/test_pause_and_best.py` | 一時停止で全部止まること、クリア時のベストタイムの記録と表示 |
+| `tests/test_audio.py` | BGMの切り替え・効果音を鳴らす場面（音は偽物に差し替える） |
 | `tests/test_game_simulation.py` | 難易度ごとにボットで30秒遊ばせ、鬼の動きが以前と同じか（指紋で比較） |
 
 数値やAIを**意図して**変えたときは、`test_difficulty.py` の表や `test_game_simulation.py` の指紋が失敗する。
@@ -57,6 +58,7 @@ src/stealth_game/
 ├── guard.py         Guard（鬼のAI）
 ├── items.py         アイテムの配置
 ├── records.py       ベストタイムの保存・読み込み
+├── assets/sounds/   BGM・効果音のファイル（魔王魂。一覧は docs/design.md）
 ├── render/          Panda3Dのメッシュ作成・全体表示カメラの計算
 └── app/             ゲーム本体（StealthGame）と機能ごとのMixin
     ├── game.py      StealthGame：進行・捕獲・応援/挟み撃ちの調整・メインループ
@@ -65,7 +67,8 @@ src/stealth_game/
     ├── visuals.py   見た目の作成・更新（足音の範囲の表示を含む）
     ├── hud.py       文字・警戒度メーター
     ├── menu.py      難易度選択と設定
-    └── helpers.py   お助けアイテム
+    ├── helpers.py   お助けアイテム
+    └── audio.py     BGMと効果音（ファイルの一覧・音量・鳴らす場面）
 ```
 
 Panda3Dに依存するのは `render/` と `app/` だけ。ほかのモジュール（ロジック）はPanda3Dなしで読み込める。

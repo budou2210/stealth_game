@@ -71,6 +71,7 @@ class HelperMixin:
             self.notice_timer = 5.0
             self.notice_key = "both_appeared" if len(appeared) > 1 else f"{appeared[0]}_appeared"
             self.notice_kinds = appeared
+            self.play_sound("helper_appeared")
 
     def collect_helper(self):
         for kind, cell in self.helper_pickups.items():
@@ -81,12 +82,14 @@ class HelperMixin:
                 self.helper_pickups[kind] = None
                 self.held[kind] += 1
                 self.helper_spawn_timers[kind] = HELPER_SPAWN_INTERVAL
+                self.play_sound("helper_pickup")
 
     def use_cloak(self):
-        """E：透明化を使う（透明化中は重ねて使えない）。"""
+        """E：透明化を使う（透明化中は重ねて使えない）。使ったときの音はない（静かに消える）。"""
         if self.state != "play" or "cloak" not in self.helper_kinds():
             return
         if self.held["cloak"] <= 0 or self.cloak_timer > 0:
+            self.play_sound("denied")
             return
         self.held["cloak"] -= 1
         self.cloak_timer = CLOAK_TIME
@@ -100,14 +103,17 @@ class HelperMixin:
         if self.state != "play" or "decoy" not in self.helper_kinds():
             return
         if self.held["decoy"] <= 0:
+            self.play_sound("denied")
             return
         cell = player_cell(self.player)
         if cell in self.world.safe_cells or self.world.is_wall(*cell):
+            self.play_sound("denied")
             return
         self.held["decoy"] -= 1
         x, y = cell_center(cell)
         node = self.add_box(self.render, (x - 0.18, y - 0.18, 0), (0.36, 0.36, 0.2), DECOY_PLACED_COLOR)
         self.placed_decoys.append({"cell": cell, "timer": DECOY_FUSE, "np": node})
+        self.play_sound("decoy_place")
 
     def fire_decoy(self, decoy):
         """大きな音を出し、範囲内の鬼を引きつける。"""
@@ -119,6 +125,7 @@ class HelperMixin:
                 guard.hear_decoy(cell)
         decoy["np"].removeNode()
         self.add_ring(x, y, radius, DECOY_RING_COLOR, 0.35)
+        self.play_sound("decoy_fire")
 
     def add_ring(self, x, y, radius, color, alpha):
         """床に広がって消える円（音の罠の音・スタンの光）。"""
@@ -139,6 +146,7 @@ class HelperMixin:
         if self.state != "play" or "flash" not in self.helper_kinds():
             return
         if self.held["flash"] <= 0 or self.player.safe:
+            self.play_sound("denied")
             return
         self.held["flash"] -= 1
         px, py = self.player.x, self.player.y
@@ -150,6 +158,7 @@ class HelperMixin:
             elif guard.distance_to(px, py) <= FLASH_RADIUS:
                 guard.stun(self.player, STUN_TIME_NEAR)
         self.add_ring(px, py, FLASH_RADIUS, FLASH_RING_COLOR, 0.6)
+        self.play_sound("flash")
 
     def update_placed_decoys(self, dt):
         still_waiting = []
