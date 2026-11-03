@@ -76,11 +76,23 @@ uv run stealth-game
 | Space / \ | 音の罠を置く |
 | Tab | 視点の切り替え（全体 → 中間 → 近い） |
 | F | 設定：足音の範囲の表示のオン・オフ |
+| P | 一時停止・再開 |
 | R | 同じ難易度でやり直す |
 | M | 難易度選択に戻る |
-| Esc | 終了 |
+| Esc | ゲームを終了（どの画面でも） |
 
 難易度選択の画面では、↑↓で選んでEnter（または1〜5キー）で始めます。
+一時停止中は時間も警備員も止まり、P で再開、R でやり直し、M で難易度選択に戻れます。
+
+## ベストタイム
+
+クリアすると、難易度ごとに一番速いタイムが記録され、難易度選択の画面に表示されます。記録を更新すると「新記録！」と出ます。記録はゲームを閉じても残ります。
+
+記録は次の場所に保存されます。消すと記録がリセットされます。
+
+- Windows: `%APPDATA%\stealth_game\records.json`
+- Mac: `~/Library/Application Support/stealth_game/records.json`
+- Linux: `~/.local/share/stealth_game/records.json`
 
 ## 設定
 

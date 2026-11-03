@@ -33,12 +33,23 @@ class FakeShowBase:
         self.camLens = lens
         self.buttonThrowers = []
 
+    def getAspectRatio(self):
+        return 1100 / 800
+
     def __getattr__(self, name):
         if name.startswith("__"):
             raise AttributeError(name)
         value = MagicMock()
         object.__setattr__(self, name, value)
         return value
+
+
+@pytest.fixture(autouse=True)
+def records_dir(tmp_path, monkeypatch):
+    """ベストタイムは本物の保存先ではなく、テストごとの一時フォルダに書く。"""
+    directory = tmp_path / "data"
+    monkeypatch.setenv("STEALTH_GAME_DATA_DIR", str(directory))
+    return directory
 
 
 @pytest.fixture
@@ -56,6 +67,8 @@ def game_class():
     for name in PANDA_MODULES:
         sys.modules[name] = MagicMock()
     sys.modules["direct.showbase.ShowBase"].ShowBase = FakeShowBase
+    # 操作説明の大きさを決めるのに文字列の長さを使うので、数値を返すようにしておく
+    sys.modules["direct.gui.OnscreenText"].OnscreenText.return_value.textNode.getWidth.return_value = 60.0
     from stealth_game.app.game import StealthGame
 
     # 警戒度メーターの位置は描画から求めるので、固定値にしておく

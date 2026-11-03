@@ -4,11 +4,17 @@ import os
 
 from direct.gui.DirectGui import DirectWaitBar
 from direct.gui.OnscreenText import OnscreenText
-from panda3d.core import Filename, TextNode
+from panda3d.core import CardMaker, Filename, TextNode, TransparencyAttrib
 
 from ..constants import HELPER_MAX_HELD
 from ..texts import TEXTS
-from ..theme import FONT_CANDIDATES, MENU_TEXT_BG
+from ..theme import (
+    CONTROLS_MARGIN,
+    CONTROLS_SCALE,
+    FONT_CANDIDATES,
+    MENU_TEXT_BG,
+    PAUSE_DIM_COLOR,
+)
 
 
 def find_font_path():
@@ -40,10 +46,11 @@ class HudMixin:
             mayChange=True, font=self.font,
         )
         self.controls_text = OnscreenText(
-            text="", parent=self.a2dBottomLeft, pos=(0.05, 0.04),
-            scale=0.036, fg=(0.8, 0.8, 0.8, 1), shadow=(0, 0, 0, 1),
+            text="", parent=self.a2dBottomLeft, pos=(CONTROLS_MARGIN, 0.04),
+            scale=CONTROLS_SCALE, fg=(0.8, 0.8, 0.8, 1), shadow=(0, 0, 0, 1),
             align=TextNode.ALeft, mayChange=True, font=self.font,
         )
+        self.controls_layout = None  # 操作説明を最後に並べたときの (文字, 画面の縦横比)
         self.alert_label = OnscreenText(
             text=self.text["alert"], parent=self.a2dBottomCenter, pos=(-0.78, 0.115),
             scale=0.05, fg=(1, 1, 1, 1), shadow=(0, 0, 0, 1),
@@ -53,6 +60,13 @@ class HudMixin:
             parent=self.a2dBottomCenter, pos=(0, 0, 0.13), scale=0.7,
             range=1.0, value=0.0, barColor=(0.3, 0.9, 0.3, 1),
         )
+        # 一時停止中に画面全体を暗くする板（文字より奥に置く）
+        card = CardMaker("pause_dim")
+        card.setFrame(-4, 4, -1, 1)
+        self.pause_dim = self.aspect2d.attachNewNode(card.generate(), -10)
+        self.pause_dim.setColor(*PAUSE_DIM_COLOR)
+        self.pause_dim.setTransparency(TransparencyAttrib.MAlpha)
+        self.pause_dim.hide()
         self.message_text = OnscreenText(
             text="", pos=(0, 0.1), scale=0.12, fg=(1, 1, 1, 1),
             shadow=(0, 0, 0, 1), mayChange=True, font=self.font,
@@ -96,6 +110,10 @@ class HudMixin:
         )
         self.hint_text.setText(self.hint_line())
         self.update_controls_text()
+        if self.state == "paused":
+            self.pause_dim.show()
+        else:
+            self.pause_dim.hide()
         top = max(guard.alert for guard in self.guards)
         self.alert_bar["value"] = top
         self.alert_bar["barColor"] = (min(1.0, 0.3 + top), max(0.1, 0.9 - top), 0.2, 1)
@@ -109,10 +127,19 @@ class HudMixin:
         return "  ".join(parts)
 
     def update_controls_text(self):
-        """変わったときだけ書き換える（毎フレームの文字の作り直しを避ける）。"""
+        """操作説明を書き換え、画面の幅に収まる大きさにする。
+
+        文字かウィンドウの縦横比が変わったときだけ行う（毎フレームの文字の作り直しを避ける）。
+        """
         line = self.controls_line()
-        if line != self.controls_text.getText():
-            self.controls_text.setText(line)
+        aspect = self.getAspectRatio()
+        if (line, aspect) == self.controls_layout:
+            return
+        self.controls_layout = (line, aspect)
+        self.controls_text.setText(line)
+        available = 2 * aspect - 2 * CONTROLS_MARGIN  # 画面の横幅から左右の余白を引いた長さ
+        width = self.controls_text.textNode.getWidth()  # 大きさ1のときの文字列の長さ
+        self.controls_text.setScale(min(CONTROLS_SCALE, available / width) if width > 0 else CONTROLS_SCALE)
 
     def helper_status(self):
         parts = [

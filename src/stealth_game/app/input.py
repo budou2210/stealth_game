@@ -46,6 +46,7 @@ class InputMixin:
             "flash": [ascii_button("q"), ascii_button("/")],
             "decoy": [KeyboardButton.space(), ascii_button("\\")],
             "noise_range": [ascii_button("f")],
+            "pause": [ascii_button("p")],
         }
 
     def pressed_now(self, name):
@@ -57,13 +58,17 @@ class InputMixin:
 
     def poll_action_keys(self):
         """押した瞬間の操作。キーごとに毎回調べるので、他のキーと同時押しでも反応する。"""
-        names = ("overview", "confirm", "decoy", "cloak", "flash", "noise_range")
+        names = ("overview", "confirm", "decoy", "cloak", "flash", "noise_range", "pause")
         presses = {name: self.pressed_now(name) for name in names}
         if presses["noise_range"]:  # 設定の切り替えは、メニューでもプレイ中でもできる
             self.toggle_noise_range()
+        if presses["pause"]:
+            self.toggle_pause()
         if self.state == "menu":
             if presses["confirm"]:
                 self.choose_difficulty(None)
+            return
+        if self.state == "paused":  # 一時停止中は、再開・やり直し・難易度選択・設定・終了だけ受け付ける
             return
         if presses["overview"]:
             self.toggle_overview()

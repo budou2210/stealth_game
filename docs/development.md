@@ -21,7 +21,7 @@ uv run pytest
 **プロジェクトのフォルダ（`stealth_game`）で実行する。** `src` などの下のフォルダで `uv run pytest` とだけ打つと、
 そのフォルダの中だけを探して「collected 0 items」になる（そのときは `uv run pytest ../tests` のように場所を指定する）。
 
-ウィンドウやGPUがなくても動く（ゲーム全体のテストはPanda3Dを差し替えて動かす）。20秒ほどで終わる。
+ウィンドウやGPUがなくても動く（ゲーム全体のテストはPanda3Dを差し替えて動かす）。30秒ほどで終わる。
 
 | ファイル | 確かめること |
 |---|---|
@@ -31,6 +31,8 @@ uv run pytest
 | `tests/test_items.py` | アイテムが各区画に散らばって置かれる |
 | `tests/test_difficulty.py` | 難易度の数値が `docs/design.md` の仕様表どおり |
 | `tests/test_hud.py` | 操作説明・出現のお知らせ・足音の範囲の表示と設定 |
+| `tests/test_records.py` | ベストタイムの保存・読み込み・更新の判定 |
+| `tests/test_pause_and_best.py` | 一時停止で全部止まること、クリア時のベストタイムの記録と表示 |
 | `tests/test_game_simulation.py` | 難易度ごとにボットで30秒遊ばせ、鬼の動きが以前と同じか（指紋で比較） |
 
 数値やAIを**意図して**変えたときは、`test_difficulty.py` の表や `test_game_simulation.py` の指紋が失敗する。
@@ -54,6 +56,7 @@ src/stealth_game/
 ├── player.py        Player
 ├── guard.py         Guard（鬼のAI）
 ├── items.py         アイテムの配置
+├── records.py       ベストタイムの保存・読み込み
 ├── render/          Panda3Dのメッシュ作成・全体表示カメラの計算
 └── app/             ゲーム本体（StealthGame）と機能ごとのMixin
     ├── game.py      StealthGame：進行・捕獲・応援/挟み撃ちの調整・メインループ

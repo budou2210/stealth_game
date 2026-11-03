@@ -28,7 +28,9 @@ class MenuMixin:
         lines = [self.text["menu_prompt"], setting, ""]
         for i, cfg in enumerate(DIFFICULTIES):
             marker = ">" if i == self.menu_index else " "
-            lines.append(f"{marker} {i + 1}. {self.level_name(cfg)}{self.lives_label(cfg)}")
+            best = self.best_times.get(cfg.key)
+            best_label = self.text["best_label"].format(time=best) if best is not None else ""
+            lines.append(f"{marker} {i + 1}. {self.level_name(cfg)}{self.lives_label(cfg)}{best_label}")
             lines.append(self.text[f"{cfg.key}_desc"])
             lines.append("")
         self.menu_text.setText("\n".join(lines))

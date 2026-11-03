@@ -29,6 +29,7 @@ from ..items import is_valid_item_cell, pick_item_cells
 from ..layout import EXIT_CELL, PLAYER_START
 from ..mapgen import build_guard_routes, build_wanderer_spawns
 from ..player import Player, player_cell
+from ..records import load_records, records_path, save_records, update_best
 from ..render.meshes import build_level_node, make_unit_box
 from ..theme import INITIAL_CAMERA_LOOK, INITIAL_CAMERA_POS
 from ..world import World
@@ -74,6 +75,8 @@ class StealthGame(
         self.notice_key = "decoy_appeared"
         self.notice_kinds = []  # 出現のお知らせに載せる種類（同時に出たとき用）
         self.camera_mode = "overview"
+        self.records_file = records_path()
+        self.best_times = load_records(self.records_file)  # {難易度のkey: ベストタイム(秒)}
         self.cam_pos = Vec3(*INITIAL_CAMERA_POS)
         self.cam_look = Vec3(*INITIAL_CAMERA_LOOK)
 
@@ -323,17 +326,40 @@ class StealthGame(
         if self.check_caught():
             self.on_caught()
         elif self.check_exit_reached():
-            self.state = "win"
-            self.message_text.setText(self.text["win"].format(time=self.elapsed))
+            self.on_win()
 
-    def update(self, task):
-        dt = min(ClockObject.getGlobalClock().getDt(), 0.05)
+    def on_win(self):
+        """クリア。その難易度のベストタイムより速ければ記録を書き換えて保存する。"""
+        self.state = "win"
+        key = self.difficulty.key
+        if update_best(self.best_times, key, self.elapsed):
+            save_records(self.records_file, self.best_times)
+            record = self.text["new_record"]
+        else:
+            record = self.text["best_record"].format(time=self.best_times[key])
+        self.message_text.setText(self.text["win"].format(time=self.elapsed, record=record))
+
+    def toggle_pause(self):
+        """P：プレイ中なら一時停止、一時停止中なら再開する。"""
+        if self.state == "play":
+            self.state = "paused"
+            self.message_text.setText(self.text["paused"])
+        elif self.state == "paused":
+            self.state = "play"
+            self.message_text.setText("")
+
+    def step(self, dt):
+        """1フレーム分の処理。一時停止中は時間・警備員・アイテムの回転などを全部止める。"""
         self.poll_action_keys()
         if self.state == "play":
             self.update_play(dt)
         elif self.state == "caught":
             self.update_caught(dt)
-        self.update_visuals(dt)
+        frozen = self.state == "paused"
+        self.update_visuals(0.0 if frozen else dt)
         self.update_camera(dt)
         self.update_hud()
+
+    def update(self, task):
+        self.step(min(ClockObject.getGlobalClock().getDt(), 0.05))
         return task.cont
