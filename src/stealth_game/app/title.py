@@ -37,6 +37,10 @@ class TitleMixin:
             text=self.text["title"], pos=(0, 0.62), scale=0.2, fg=(1, 1, 1, 1),
             shadow=(0, 0, 0, 1), font=self.font,
         )
+        self.title_subtitle = OnscreenText(
+            text=self.text["subtitle"], pos=(0, 0.5), scale=0.06, fg=(1, 1, 1, 1),
+            shadow=(0, 0, 0, 1), font=self.font,
+        )
         self.title_prompt = OnscreenText(
             text=self.text["title_prompt"], pos=(0, -0.85), scale=0.07, fg=(1, 1, 1, 1),
             shadow=(0, 0, 0, 1), font=self.font,
@@ -45,7 +49,7 @@ class TitleMixin:
         self.set_title_visible(False)
 
     def set_title_visible(self, visible):
-        nodes = [self.title_logo, self.title_prompt]
+        nodes = [self.title_logo, self.title_subtitle, self.title_prompt]
         if self.title_image is not None:
             nodes.append(self.title_image)
         for node in nodes:

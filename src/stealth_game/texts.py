@@ -2,7 +2,8 @@
 
 TEXTS = {
     "ja": {
-        "title": "ステルスゲーム",
+        "title": "SNEAKUBE",
+        "subtitle": "スニーキューブ ― 箱たちの潜入ゲーム",
         "title_prompt": "Enterキーでスタート",
         "menu_prompt": "難易度を選んでください（↑↓で選択、Enterで決定。1〜5キーでも選べます）",
         "easy": "簡単",
@@ -59,7 +60,8 @@ TEXTS = {
         "credit": "音楽・効果音：魔王魂",
     },
     "en": {
-        "title": "STEALTH GAME",
+        "title": "SNEAKUBE",
+        "subtitle": "A stealth game of boxes",
         "title_prompt": "Press Enter to start",
         "menu_prompt": "Choose a difficulty (Up/Down + Enter, or press 1-5)",
         "easy": "Easy",

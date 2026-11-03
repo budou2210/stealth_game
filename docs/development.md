@@ -2,7 +2,7 @@
 
 プレイヤー向けの説明は [README.md](../README.md)、仕様の一覧・設計方針・保留中の案は [design.md](design.md) を参照。
 
-Panda3D + Python のステルスゲーム。警備員は自作のA*（4方向・マンハッタン距離・`heapq`）で動く。
+スニーキューブ（SNEAKUBE）は、Panda3D + Python のステルスゲーム。警備員は自作のA*（4方向・マンハッタン距離・`heapq`）で動く。
 
 ## 起動
 

@@ -1,7 +1,7 @@
 [project]
 name = "stealth-game"
 version = "0.1.0"
-description = "Panda3D製のステルスゲーム（A*で動く警備員）"
+description = "スニーキューブ（SNEAKUBE）：Panda3D製のステルスゲーム（A*で動く警備員）"
 readme = "README.md"
 authors = [
     { name = "Hiro", email = "351768405+budou2210@users.noreply.github.com" }

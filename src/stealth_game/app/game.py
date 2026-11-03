@@ -47,7 +47,7 @@ class StealthGame(
     InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, TitleMixin, HelperMixin, AudioMixin, ShowBase
 ):
     def __init__(self):
-        loadPrcFileData("", "window-title Stealth Game\nwin-size 1100 800")
+        loadPrcFileData("", "window-title SNEAKUBE\nwin-size 1100 800")
         loadPrcFileData("", f"audio-preload-threshold {AUDIO_PRELOAD_THRESHOLD}")
         super().__init__()
         self.disableMouse()

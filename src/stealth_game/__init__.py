@@ -1,4 +1,4 @@
-"""Panda3D ステルスゲーム（A*で動く警備員）
+"""スニーキューブ（SNEAKUBE）：Panda3D ステルスゲーム（A*で動く警備員）
 
 実行方法:
     uv run stealth-game
