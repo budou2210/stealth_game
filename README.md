@@ -16,6 +16,9 @@ uv run stealth-game
 uv run pytest
 ```
 
+**プロジェクトのフォルダ（`stealth_game`）で実行する。** `src` などの下のフォルダで `uv run pytest` とだけ打つと、
+そのフォルダの中だけを探して「collected 0 items」になる（そのときは `uv run pytest ../tests` のように場所を指定する）。
+
 ウィンドウやGPUがなくても動く（ゲーム全体のテストはPanda3Dを差し替えて動かす）。10秒ほどで終わる。
 
 | ファイル | 確かめること |
