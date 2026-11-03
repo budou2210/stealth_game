@@ -25,6 +25,7 @@ uv run stealth-game
 | Esc | 終了 |
 
 ルールや難易度の詳細は `src/stealth_game/__init__.py` の説明文と `src/stealth_game/difficulty.py` を参照。
+仕様の一覧・設計方針・保留中の案は [docs/design.md](docs/design.md) にまとめてある。
 
 ## 構成
 
