@@ -8,6 +8,7 @@ from .constants import (
     DIRECT_PURSUIT_RANGE,
     EXCLAIM_TIME,
     FLANK_GOAL_FREE,
+    FLANK_MIN_DISTANCE,
     FOCUS_REACH,
     GUARD_PATROL_SPEED,
     GUARD_TURN_RATE,
@@ -354,7 +355,7 @@ class Guard:
         if self.cfg.flank_avoid_cost <= 0 or self.chase_role == 0 or self.last_known is None:
             return False
         cx, cy = cell_center(self.last_known)
-        return self.distance_to(cx, cy) > self.cfg.flank_min_distance
+        return self.distance_to(cx, cy) > FLANK_MIN_DISTANCE
 
     def replan_pursuit(self, target):
         """targetへの経路を引く。回り込む役なら、近い鬼の通る道を避ける。"""

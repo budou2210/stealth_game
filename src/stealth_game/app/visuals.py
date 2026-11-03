@@ -25,7 +25,7 @@ from ..constants import (
     EXCLAIM_TIME,
     ITEMS_PER_QUADRANT,
 )
-from ..difficulty import DIFFICULTIES, HIDDEN_DIFFICULTIES
+from ..difficulty import DIFFICULTIES
 from ..grid import cell_center
 from ..guard import Guard
 from ..layout import EXIT_CELL, QUADRANTS
@@ -64,7 +64,7 @@ class VisualsMixin:
         self.add_box(self.player_np, (-0.12, 0.15, 0.55), (0.24, 0.3, 0.2), (0.9, 1, 0.9, 1))
 
         # 鬼が一番多い難易度に合わせて作り、少ない難易度では余りを隠す
-        most = max(len(self.make_guards(cfg)) for cfg in DIFFICULTIES + HIDDEN_DIFFICULTIES)
+        most = max(len(self.make_guards(cfg)) for cfg in DIFFICULTIES)
         self.guard_views = [self.make_guard_view() for _ in range(most)]
         total = ITEMS_PER_QUADRANT * len(QUADRANTS)
         self.item_nps = [self.make_item_node() for _ in range(total)]

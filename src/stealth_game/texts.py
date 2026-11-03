@@ -3,7 +3,7 @@
 TEXTS = {
     "ja": {
         "title": "ステルスゲーム",
-        "menu_prompt": "難易度を選んでください（↑↓で選択、Enterで決定。1〜{count}キーでも選べます）",
+        "menu_prompt": "難易度を選んでください（↑↓で選択、Enterで決定。1〜5キーでも選べます）",
         "easy": "簡単",
         "normal": "普通",
         "hard": "難しい",
@@ -14,8 +14,6 @@ TEXTS = {
         "hard_desc": "奴らはあなたの気配を嗅ぎつける。一瞬の油断が命取り。",
         "very_hard_desc": "逃げ道は、ほんのわずかしか残されていない。",
         "hell_desc": "あなたを助けるものは、何ひとつない。ようこそ、地獄へ。",
-        "endless_hell": "無間地獄",
-        "endless_hell_desc": "すべての目が、あなただけを探している。",
         # 操作説明は「移動 → その難易度で使えるお助けアイテム → その他」の順につなげて表示する
         "controls_move": "WASD/矢印: 移動  Shift: 忍び足",
         "cloak_controls": "E・.: 透明化",
@@ -45,7 +43,7 @@ TEXTS = {
     },
     "en": {
         "title": "STEALTH GAME",
-        "menu_prompt": "Choose a difficulty (Up/Down + Enter, or press 1-{count})",
+        "menu_prompt": "Choose a difficulty (Up/Down + Enter, or press 1-5)",
         "easy": "Easy",
         "normal": "Normal",
         "hard": "Hard",
@@ -56,8 +54,6 @@ TEXTS = {
         "hard_desc": "They can sense you. One careless step is all it takes.",
         "very_hard_desc": "Only the narrowest escape routes remain.",
         "hell_desc": "Nothing here will help you. Welcome to Hell.",
-        "endless_hell": "Endless Hell",
-        "endless_hell_desc": "Every eye is searching for you alone.",
         "controls_move": "WASD/Arrows: move  Shift: sneak",
         "cloak_controls": "E/.: cloak",
         "flash_controls": "Q//: stun",

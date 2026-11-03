@@ -4,7 +4,7 @@ import sys
 
 from panda3d.core import KeyboardButton, ModifierButtons
 
-from ..difficulty import DIFFICULTIES, HIDDEN_DIFFICULTIES
+from ..difficulty import DIFFICULTIES
 
 
 def ascii_button(char):
@@ -28,9 +28,7 @@ class InputMixin:
         self.accept("m", self.open_menu)
         self.accept("arrow_up", self.move_menu, [-1])
         self.accept("arrow_down", self.move_menu, [1])
-        self.accept("arrow_left", self.enter_secret, ["L"])
-        self.accept("arrow_right", self.enter_secret, ["R"])
-        for i in range(len(DIFFICULTIES + HIDDEN_DIFFICULTIES)):
+        for i in range(len(DIFFICULTIES)):
             self.accept(str(i + 1), self.choose_difficulty, [i])
         # Tab・Enter（メニューの決定）・Space・Eは毎フレーム押下状態を調べ、押した瞬間に動かす
         # （移動キーを押しっぱなしでも確実に反応させるため）

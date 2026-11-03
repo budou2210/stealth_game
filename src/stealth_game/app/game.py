@@ -56,8 +56,6 @@ class StealthGame(
         self.box = make_unit_box()
         self.state = "menu"
         self.menu_index = DEFAULT_DIFFICULTY_INDEX
-        self.secret_unlocked = False  # 隠しコマンドを入れたか（ゲームを閉じるまで有効）
-        self.secret_input = ""  # メニューで押した←→の並び
         self.elapsed = 0.0
         self.item_cells = []
         self.items_collected = set()
