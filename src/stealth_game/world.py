@@ -116,6 +116,18 @@ class World:
         """壁にぶつかるまでの距離を返す（視界の扇形の描画用）。"""
         return self.first_wall_distance(x, y, math.cos(angle), math.sin(angle), max_dist)
 
+    def visible_outline(self, x, y, radius, rays):
+        """(x,y)から放射状にrays本の線を伸ばし、壁で止まった先の点を順に返す（足音の範囲の描画用）。
+
+        この形の中にいれば、(x,y)との間に壁がない（視線が通る）。最初と最後は同じ向きの点。
+        """
+        points = []
+        for i in range(rays + 1):
+            angle = 2 * math.pi * i / rays
+            dist = self.cast_ray(x, y, angle, radius)
+            points.append((x + math.cos(angle) * dist, y + math.sin(angle) * dist))
+        return points
+
     def is_next_to_wall(self, cx, cy):
         around = ((dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
         return any(self.is_wall(cx + dx, cy + dy) for dx, dy in around)

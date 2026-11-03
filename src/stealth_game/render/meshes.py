@@ -1,4 +1,4 @@
-"""モデルファイルを使わずに作るメッシュ（箱・円・マップ全体）。"""
+"""モデルファイルや画像を使わずに作るメッシュとテクスチャ（箱・円・縞模様・マップ全体）。"""
 
 import math
 
@@ -11,6 +11,9 @@ from panda3d.core import (
     GeomVertexFormat,
     GeomVertexWriter,
     NodePath,
+    PNMImage,
+    SamplerState,
+    Texture,
 )
 
 from ..layout import LEVEL_BOUNDS, MAP_H, MAP_W
@@ -65,26 +68,38 @@ def make_disc(segments=32):
     return NodePath(node)
 
 
-def make_ring(width=0.06, segments=64):
-    """外側の半径1、太さwidthの平らな輪（足音の範囲の表示用）。"""
-    vdata = GeomVertexData("ring", GeomVertexFormat.getV3(), Geom.UHStatic)
-    vdata.setNumRows((segments + 1) * 2)
+def make_stripe_texture(colors):
+    """colors の色を順に並べた縞模様のテクスチャ（横方向にくり返す）。1色が1ピクセル。"""
+    image = PNMImage(len(colors), 1, 4)
+    for i, (r, g, b, a) in enumerate(colors):
+        image.setXelA(i, 0, r, g, b, a)
+    texture = Texture("stripes")
+    texture.load(image)
+    texture.setWrapU(SamplerState.WM_repeat)
+    texture.setMinfilter(SamplerState.FT_nearest)  # 縞の境目をくっきりさせる
+    texture.setMagfilter(SamplerState.FT_nearest)
+    return texture
+
+
+def make_floor_fan_geom(center, points, z, stripe_period):
+    """centerから外周pointsへ張った平らな扇形（壁で切れた範囲の描画用）。
+
+    テクスチャ座標は床の位置から決める（x+y が stripe_period 進むごとに縞が一周する）。
+    そのため斜めの縞が床に固定され、プレイヤーが動いても縞は流れない。
+    """
+    vdata = GeomVertexData("fan", GeomVertexFormat.getV3t2(), Geom.UHDynamic)
+    vdata.setNumRows(len(points) + 1)
     vertex = GeomVertexWriter(vdata, "vertex")
-    for i in range(segments + 1):
-        angle = 2 * math.pi * i / segments
-        c, s = math.cos(angle), math.sin(angle)
-        vertex.addData3(c, s, 0)
-        vertex.addData3(c * (1 - width), s * (1 - width), 0)
-    tris = GeomTriangles(Geom.UHStatic)
-    for i in range(segments):
-        a = i * 2
-        tris.addVertices(a, a + 1, a + 2)
-        tris.addVertices(a + 1, a + 3, a + 2)
+    texcoord = GeomVertexWriter(vdata, "texcoord")
+    for x, y in [center, *points]:
+        vertex.addData3(x, y, z)
+        texcoord.addData2((x + y) / stripe_period, 0)
+    fan = GeomTrifans(Geom.UHDynamic)
+    fan.addConsecutiveVertices(0, len(points) + 1)
+    fan.closePrimitive()
     geom = Geom(vdata)
-    geom.addPrimitive(tris)
-    node = GeomNode("ring")
-    node.addGeom(geom)
-    return NodePath(node)
+    geom.addPrimitive(fan)
+    return geom
 
 
 class MeshBuilder:

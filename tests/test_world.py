@@ -2,6 +2,8 @@
 
 from collections import deque
 
+import pytest
+
 from stealth_game.grid import cell_center
 from stealth_game.layout import (
     EXIT_CELL,
@@ -114,6 +116,21 @@ def test_diagonal_wall_gap_blocks_sight(world):
     assert not world.has_line_of_sight(*a, *b)
     world.walls[y + dy][x] = 0  # 片方だけなら、角をかすめて見える
     assert world.has_line_of_sight(*a, *b)
+
+
+def test_visible_outline_stops_at_walls(world):
+    """足音の範囲（外側）の形：見通しのよい向きは半径まで伸び、壁のある向きは壁で止まる。"""
+    left, _ = find_wall_between(world)
+    x, y = cell_center(left)
+    outline = world.visible_outline(x, y, 6.0, 4)  # 東・北・西・南・東
+    assert len(outline) == 5
+    assert outline[0] == pytest.approx(outline[-1])
+    east_x, _ = outline[0]
+    assert east_x - x == pytest.approx(0.5), "すぐ右の壁で止まる"
+    run = find_straight_run(world, 8)
+    x, y = cell_center(run[0])
+    east_x, _ = world.visible_outline(x, y, 6.0, 4)[0]
+    assert east_x - x == pytest.approx(6.0), "壁がなければ半径いっぱいまで"
 
 
 def test_is_blocked_by_wall(world):

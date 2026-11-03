@@ -30,7 +30,7 @@ from ..difficulty import DIFFICULTIES
 from ..grid import cell_center
 from ..guard import Guard
 from ..layout import EXIT_CELL, QUADRANTS
-from ..render.meshes import make_disc, make_ring
+from ..render.meshes import make_disc, make_floor_fan_geom, make_stripe_texture
 from ..theme import (
     CLOAK_PICKUP_COLOR,
     CONE_COLORS,
@@ -42,8 +42,10 @@ from ..theme import (
     EXCLAIM_COLOR,
     EXCLAIM_FRAME_COLOR,
     FLASH_PICKUP_COLOR,
-    NOISE_FILL_COLOR,
-    NOISE_RING_COLOR,
+    NOISE_INNER_COLOR,
+    NOISE_RAYS,
+    NOISE_STRIPE_COLORS,
+    NOISE_STRIPE_PERIOD,
     SAFE_DOOR_COLOR,
     STATE_COLORS,
     STUN_COLOR,
@@ -84,9 +86,13 @@ class VisualsMixin:
         }
         self.player_np.setTransparency(TransparencyAttrib.MAlpha)
         self.disc = make_disc()
-        # 足音の範囲（走っている間だけ足元に出す）。輪＝届く距離、内側の薄い円＝壁越しでも届く距離
-        self.noise_ring = self.make_floor_overlay(make_ring(), NOISE_RING_COLOR)
-        self.noise_fill = self.make_floor_overlay(self.disc.copyTo(self.render), NOISE_FILL_COLOR)
+        # 足音の範囲（走っている間だけ足元に出す）。
+        # 黄黒の縞＝見通しがあれば聞こえる範囲（壁で切れる）、赤い円＝壁越しでも必ず聞こえる範囲
+        self.noise_area = GeomNode("noise_area")
+        area_np = self.make_floor_overlay(self.render.attachNewNode(self.noise_area), (1, 1, 1, 1))
+        area_np.setTexture(make_stripe_texture(NOISE_STRIPE_COLORS))
+        self.noise_area_np = area_np
+        self.noise_inner = self.make_floor_overlay(self.disc.copyTo(self.render), NOISE_INNER_COLOR)
         # 安全地帯の扉。外に出ると現れて、戻れなくなる
         self.door_nps = [
             self.add_box(self.render, (x, y, 0), (1, 1, WALL_HEIGHT), SAFE_DOOR_COLOR)
@@ -274,13 +280,16 @@ class VisualsMixin:
         return radius, radius * SOUND_WALL_MUFFLE
 
     def update_noise_view(self):
+        self.noise_area.removeAllGeoms()
         if not self.noise_range_visible():
-            self.noise_ring.hide()
-            self.noise_fill.hide()
+            self.noise_area_np.hide()
+            self.noise_inner.hide()
             return
         outer, muffled = self.noise_radii()
         x, y = self.player.x, self.player.y
-        for node, radius, z in ((self.noise_fill, muffled, 0.04), (self.noise_ring, outer, 0.045)):
-            node.show()
-            node.setPos(x, y, z)
-            node.setScale(radius)
+        outline = self.world.visible_outline(x, y, outer, NOISE_RAYS)
+        self.noise_area.addGeom(make_floor_fan_geom((x, y), outline, 0.035, NOISE_STRIPE_PERIOD))
+        self.noise_area_np.show()
+        self.noise_inner.show()
+        self.noise_inner.setPos(x, y, 0.04)  # 縞の上に重ねる
+        self.noise_inner.setScale(muffled)
