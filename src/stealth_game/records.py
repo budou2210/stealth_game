@@ -1,6 +1,8 @@
 """難易度ごとのベストタイムの保存と読み込み。
 
-保存先はユーザーごとのデータフォルダ（ゲームのフォルダの中には置かない）。
+保存先はプロジェクトのフォルダの saves/records.json（.gitignore で GitHub には上げない）。
+プロジェクトのフォルダの外にインストールされて pyproject.toml が見つからないときは、
+ユーザーごとのデータフォルダに保存する。
 - Windows: %APPDATA%\\stealth_game\\records.json
 - Mac: ~/Library/Application Support/stealth_game/records.json
 - Linux: $XDG_DATA_HOME（なければ ~/.local/share）/stealth_game/records.json
@@ -13,13 +15,12 @@ import sys
 from pathlib import Path
 
 APP_DIR_NAME = "stealth_game"
+SAVES_DIR_NAME = "saves"
 RECORDS_FILE_NAME = "records.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/stealth_game/records.py から2つ上
 
 
-def data_dir():
-    override = os.environ.get("STEALTH_GAME_DATA_DIR")
-    if override:
-        return Path(override)
+def user_data_dir():
     if sys.platform == "win32":
         base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
     elif sys.platform == "darwin":
@@ -27,6 +28,15 @@ def data_dir():
     else:
         base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
     return base / APP_DIR_NAME
+
+
+def data_dir():
+    override = os.environ.get("STEALTH_GAME_DATA_DIR")
+    if override:
+        return Path(override)
+    if (PROJECT_ROOT / "pyproject.toml").exists():
+        return PROJECT_ROOT / SAVES_DIR_NAME
+    return user_data_dir()
 
 
 def records_path():

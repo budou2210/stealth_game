@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# ゲームの記録（ベストタイムなど）
+saves/

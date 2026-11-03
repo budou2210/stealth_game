@@ -88,11 +88,8 @@ uv run stealth-game
 
 クリアすると、難易度ごとに一番速いタイムが記録され、難易度選択の画面に表示されます。記録を更新すると「新記録！」と出ます。記録はゲームを閉じても残ります。
 
-記録は次の場所に保存されます。消すと記録がリセットされます。
-
-- Windows: `%APPDATA%\stealth_game\records.json`
-- Mac: `~/Library/Application Support/stealth_game/records.json`
-- Linux: `~/.local/share/stealth_game/records.json`
+記録はゲームのフォルダの `saves/records.json` に保存されます。このファイルを消すと記録がリセットされます。
+ゲームのフォルダごと消したり、ダウンロードし直したりすると、記録も消えるので注意してください。
 
 ## 設定
 
