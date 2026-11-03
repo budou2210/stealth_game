@@ -39,6 +39,14 @@ uv run pytest
 数値やAIを**意図して**変えたときは、`test_difficulty.py` の表や `test_game_simulation.py` の指紋が失敗する。
 失敗メッセージに新しい指紋が出るので、それで書き換える。
 
+### ゲーム全体を動かして確かめるとき
+
+- Panda3Dを使わずに動かすには、`panda3d`と`direct`を`sys.modules[...] = MagicMock()`で差し替え、`ShowBase`をスタブにしてから`stealth_game.app.game`を読み込む（`tests/conftest.py` の `game_class` がこれをしている）。`StealthGame`を作り、`is_down`をボットの入力に差し替えて`update_play(1/60)`などを回す。
+  - `update_visuals`はMagicMockの呼び出し記録でメモリを大量に使うので、長時間回すときは外す。
+- 挙動比較: 乱数の種とボットの動きを固定し、警備員の位置・状態・経路をフレームごとに比べる（リファクタリング前後で動きが変わっていないかの確認に使う）。
+- 実際のPanda3Dでの起動確認は `window-type offscreen` で可能。オフスクリーンでは`mouseWatcherNode`がないので、`bind_events`と`is_down`を差し替える。`base.win.saveScreenshot()` で画面を撮れる。
+- 日本語キーボードでは `\` キーが「¥」になり、音の罠のキーとして反応しないことがある（Space でも置ける）。
+
 ## 構成
 
 ```
