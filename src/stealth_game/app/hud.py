@@ -86,7 +86,7 @@ class HudMixin:
                 helpers=self.helper_status(),
             )
         )
-        self.hint_text.setText(self.text[self.hint_key()])
+        self.hint_text.setText(self.hint_line())
         self.update_controls_text()
         top = max(guard.alert for guard in self.guards)
         self.alert_bar["value"] = top
@@ -119,6 +119,13 @@ class HudMixin:
         if self.difficulty.lives <= 1:
             return ""
         return self.text["lives_status"].format(lives=self.lives)
+
+    def hint_line(self):
+        key = self.hint_key()
+        if key != "both_appeared":
+            return self.text[key]
+        labels = [self.text[f"{kind}_label"] for kind in self.notice_kinds]
+        return self.text[key].format(kinds=self.text["label_separator"].join(labels))
 
     def hint_key(self):
         if self.notice_timer > 0:

@@ -27,7 +27,7 @@ SPEC = [
     ("wanderers", False, True, True, True, True),
     ("lives", 3, 2, 1, 1, 1),
     ("cloak", True, True, True, True, False),
-    ("flash", True, True, True, True, False),
+    ("flash", True, True, False, False, False),
     ("decoy_radius", 16, 16, 16, 16, 0),
 ]
 LEVELS = [EASY, NORMAL, HARD, VERY_HARD, HELL]

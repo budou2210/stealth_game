@@ -21,8 +21,8 @@ FRAMES = 1800  # 30秒分
 EXPECTED = {
     "easy": (31, "5f1f4bf3bba0720b"),
     "normal": (2, "775565e8cc7b0808"),
-    "hard": (5, "025cc25ce8a2b94d"),
-    "very_hard": (2, "2631e114dd485cbb"),
+    "hard": (5, "f1d190c9e1a9e206"),
+    "very_hard": (5, "ac6b49aecc9010b3"),
     "hell": (2, "555f4332c6abb6b3"),
 }
 

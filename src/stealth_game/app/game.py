@@ -71,6 +71,7 @@ class StealthGame(
         self.sound_rings = []  # 音の広がりの表示: {"np", "timer", "radius"}
         self.notice_timer = 0.0  # 0より大きい間、出現のお知らせをヒント欄に出す
         self.notice_key = "decoy_appeared"
+        self.notice_kinds = []  # 出現のお知らせに載せる種類（同時に出たとき用）
         self.camera_mode = "overview"
         self.cam_pos = Vec3(*INITIAL_CAMERA_POS)
         self.cam_look = Vec3(*INITIAL_CAMERA_LOOK)

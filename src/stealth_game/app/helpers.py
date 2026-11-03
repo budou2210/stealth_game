@@ -70,6 +70,7 @@ class HelperMixin:
         if appeared:
             self.notice_timer = 5.0
             self.notice_key = "both_appeared" if len(appeared) > 1 else f"{appeared[0]}_appeared"
+            self.notice_kinds = appeared
 
     def collect_helper(self):
         for kind, cell in self.helper_pickups.items():
