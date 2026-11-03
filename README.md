@@ -21,9 +21,19 @@ Mac / Linux:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
+## ダウンロード
+
+1. このページの上にある緑の「**Code**」ボタンを押し、「**Download ZIP**」を選びます。
+2. ダウンロードした ZIP ファイルを展開します。`stealth_game-main` というフォルダができます。
+
+Git を使える人は、`git clone https://github.com/budou2210/stealth_game.git` でもかまいません（この場合のフォルダ名は `stealth_game` です）。
+
 ## 起動
 
-ゲームのフォルダ（`stealth_game`）で次のコマンドを実行します。初回だけ、必要なものの準備に少し時間がかかります。
+1. 展開したフォルダ（`stealth_game-main`）でターミナルを開きます。
+   - Windows: フォルダを開き、上のアドレス欄に `powershell` と入力して Enter を押すと、そのフォルダで PowerShell が開きます。
+   - Mac: Finder でフォルダを右クリックし、「フォルダに新規ターミナル」を選びます。
+2. 次のコマンドを実行します。初回だけ、必要なものの準備に少し時間がかかります。
 
 ```bash
 uv run stealth-game
