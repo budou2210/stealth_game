@@ -10,6 +10,26 @@ uv run stealth-game
 
 （`python -m stealth_game` でも起動できる）
 
+## テスト
+
+```bash
+uv run pytest
+```
+
+ウィンドウやGPUがなくても動く（ゲーム全体のテストはPanda3Dを差し替えて動かす）。10秒ほどで終わる。
+
+| ファイル | 確かめること |
+|---|---|
+| `tests/test_pathfinding.py` | A*が壁や安全地帯を通らず、最短の経路を返す |
+| `tests/test_world.py` | マップがつながっている、視線・当たり判定 |
+| `tests/test_guard.py` | 鬼の視界・足音・警戒・スタン・挟み撃ちの役割 |
+| `tests/test_items.py` | アイテムが各区画に散らばって置かれる |
+| `tests/test_difficulty.py` | 難易度の数値が `docs/design.md` の仕様表どおり |
+| `tests/test_game_simulation.py` | 難易度ごとにボットで30秒遊ばせ、鬼の動きが以前と同じか（指紋で比較） |
+
+数値やAIを**意図して**変えたときは、`test_difficulty.py` の表や `test_game_simulation.py` の指紋が失敗する。
+失敗メッセージに新しい指紋が出るので、それで書き換える。
+
 ## 操作
 
 | キー | 動作 |
