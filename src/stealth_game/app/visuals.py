@@ -3,6 +3,7 @@
 import math
 
 from panda3d.core import (
+    CullBinManager,
     Geom,
     GeomNode,
     GeomTrifans,
@@ -42,6 +43,8 @@ from ..theme import (
     EXCLAIM_COLOR,
     EXCLAIM_FRAME_COLOR,
     FLASH_PICKUP_COLOR,
+    NOISE_BIN,
+    NOISE_BIN_SORT,
     NOISE_INNER_COLOR,
     NOISE_RAYS,
     NOISE_STRIPE_COLORS,
@@ -93,6 +96,12 @@ class VisualsMixin:
         area_np.setTexture(make_stripe_texture(NOISE_STRIPE_COLORS))
         self.noise_area_np = area_np
         self.noise_inner = self.make_floor_overlay(self.disc.copyTo(self.render), NOISE_INNER_COLOR)
+        # 半透明の図形はふつう「カメラから遠い順」に描かれるので、縞の形によっては赤い円より後に
+        # 描かれて上に重なってしまう。専用の描画グループで「縞 → 赤い円」の順に固定する
+        # （床・壁の後、警備員の視界などの半透明の図形より前に描く）
+        CullBinManager.getGlobalPtr().addBin(NOISE_BIN, CullBinManager.BT_fixed, NOISE_BIN_SORT)
+        self.noise_area_np.setBin(NOISE_BIN, 0)
+        self.noise_inner.setBin(NOISE_BIN, 1)
         # 安全地帯の扉。外に出ると現れて、戻れなくなる
         self.door_nps = [
             self.add_box(self.render, (x, y, 0), (1, 1, WALL_HEIGHT), SAFE_DOOR_COLOR)
