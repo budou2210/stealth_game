@@ -65,6 +65,28 @@ def make_disc(segments=32):
     return NodePath(node)
 
 
+def make_ring(width=0.06, segments=64):
+    """外側の半径1、太さwidthの平らな輪（足音の範囲の表示用）。"""
+    vdata = GeomVertexData("ring", GeomVertexFormat.getV3(), Geom.UHStatic)
+    vdata.setNumRows((segments + 1) * 2)
+    vertex = GeomVertexWriter(vdata, "vertex")
+    for i in range(segments + 1):
+        angle = 2 * math.pi * i / segments
+        c, s = math.cos(angle), math.sin(angle)
+        vertex.addData3(c, s, 0)
+        vertex.addData3(c * (1 - width), s * (1 - width), 0)
+    tris = GeomTriangles(Geom.UHStatic)
+    for i in range(segments):
+        a = i * 2
+        tris.addVertices(a, a + 1, a + 2)
+        tris.addVertices(a + 1, a + 3, a + 2)
+    geom = Geom(vdata)
+    geom.addPrimitive(tris)
+    node = GeomNode("ring")
+    node.addGeom(geom)
+    return NodePath(node)
+
+
 class MeshBuilder:
     """頂点色つきの四角形を1つのメッシュにまとめる（広いマップを軽く描くため）。"""
 

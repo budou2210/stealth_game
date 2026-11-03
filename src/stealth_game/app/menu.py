@@ -14,8 +14,18 @@ class MenuMixin:
             return self.text["no_lives_label"]
         return self.text["lives_label"].format(lives=cfg.lives)
 
+    def setting_state(self, enabled):
+        return self.text["setting_on"] if enabled else self.text["setting_off"]
+
+    def toggle_noise_range(self):
+        """設定：足音の範囲の表示を切り替える（ゲームを閉じるまで有効）。"""
+        self.show_noise_range = not self.show_noise_range
+        if self.state == "menu":
+            self.update_menu_text()
+
     def update_menu_text(self):
-        lines = [self.text["menu_prompt"], ""]
+        setting = self.text["noise_range_setting"].format(state=self.setting_state(self.show_noise_range))
+        lines = [self.text["menu_prompt"], setting, ""]
         for i, cfg in enumerate(DIFFICULTIES):
             marker = ">" if i == self.menu_index else " "
             lines.append(f"{marker} {i + 1}. {self.level_name(cfg)}{self.lives_label(cfg)}")
@@ -30,6 +40,7 @@ class MenuMixin:
         self.message_text.setText("")
         self.menu_title.show()
         self.menu_text.show()
+        self.set_play_hud_visible(False)
         self.update_menu_text()
 
     def move_menu(self, step):

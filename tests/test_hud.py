@@ -51,3 +51,53 @@ def test_spawn_notice_with_all_kinds(game_class):
     game.update_helper_spawn(1 / 60)
     hint = game.hint_line()
     assert all(game.text[f"{kind}_label"] in hint for kind in ("cloak", "flash", "decoy"))
+
+
+def test_noise_range_shown_only_while_running_outside_safe_zone(game_class):
+    game = started(game_class, NORMAL)
+    game.player.safe = False
+    game.player.moving = True
+    assert game.noise_range_visible()
+    game.player.sneaking = True
+    assert not game.noise_range_visible(), "忍び足では足音が出ない"
+    game.player.sneaking = False
+    game.player.moving = False
+    assert not game.noise_range_visible(), "止まっていれば足音は出ない"
+    game.player.moving = True
+    game.player.safe = True
+    assert not game.noise_range_visible(), "安全地帯の中では聞かれない"
+
+
+def test_noise_range_matches_difficulty(game_class):
+    for cfg in (NORMAL, HELL):
+        game = started(game_class, cfg)
+        outer, muffled = game.noise_radii()
+        assert outer == cfg.hear_radius
+        assert muffled == cfg.hear_radius / 2, "壁越しだと半分の距離まで"
+
+
+def test_noise_range_setting_toggles(game_class):
+    game = started(game_class, NORMAL)
+    game.player.safe = False
+    game.player.moving = True
+    assert game.show_noise_range, "最初はオン"
+    game.toggle_noise_range()
+    assert not game.noise_range_visible()
+    game.toggle_noise_range()
+    assert game.noise_range_visible()
+
+
+def test_noise_range_setting_in_menu(game_class):
+    game = game_class()
+    game.open_menu()
+    on = game.text["noise_range_setting"].format(state=game.text["setting_on"])
+    off = game.text["noise_range_setting"].format(state=game.text["setting_off"])
+    game.update_menu_text()
+    assert on in game.menu_text.setText.call_args[0][0]
+    game.down = {"noise_range"}
+    game.is_down = lambda name: name in game.down
+    game.poll_action_keys()  # メニューでFを押す
+    assert not game.show_noise_range
+    assert off in game.menu_text.setText.call_args[0][0]
+    game.poll_action_keys()  # 押しっぱなしでは切り替わらない
+    assert not game.show_noise_range

@@ -41,10 +41,10 @@ class HudMixin:
         )
         self.controls_text = OnscreenText(
             text="", parent=self.a2dBottomLeft, pos=(0.05, 0.04),
-            scale=0.04, fg=(0.8, 0.8, 0.8, 1), shadow=(0, 0, 0, 1),
+            scale=0.036, fg=(0.8, 0.8, 0.8, 1), shadow=(0, 0, 0, 1),
             align=TextNode.ALeft, mayChange=True, font=self.font,
         )
-        OnscreenText(
+        self.alert_label = OnscreenText(
             text=self.text["alert"], parent=self.a2dBottomCenter, pos=(-0.78, 0.115),
             scale=0.05, fg=(1, 1, 1, 1), shadow=(0, 0, 0, 1),
             align=TextNode.ARight, font=self.font,
@@ -58,13 +58,21 @@ class HudMixin:
             shadow=(0, 0, 0, 1), mayChange=True, font=self.font,
         )
         self.menu_title = OnscreenText(
-            text=self.text["title"], pos=(0, 0.62), scale=0.16, fg=(1, 1, 1, 1),
+            text=self.text["title"], pos=(0, 0.72), scale=0.14, fg=(1, 1, 1, 1),
             shadow=(0, 0, 0, 1), bg=MENU_TEXT_BG, font=self.font,
         )
         self.menu_text = OnscreenText(
-            text="", pos=(0, 0.38), scale=0.06, fg=(1, 1, 1, 1),
+            text="", pos=(0, 0.46), scale=0.05, fg=(1, 1, 1, 1),
             shadow=(0, 0, 0, 1), bg=MENU_TEXT_BG, mayChange=True, font=self.font,
         )
+
+    def set_play_hud_visible(self, visible):
+        """プレイ中だけの表示（状態・ヒント・警戒度）。メニューでは隠して、難易度の一覧と重ならないようにする。"""
+        for node in (self.status_text, self.hint_text, self.alert_label, self.alert_bar):
+            if visible:
+                node.show()
+            else:
+                node.hide()
 
     def load_japanese_font(self, font_path):
         """フォントを読み込む。失敗したらNone（英語表示に切り替わる）。"""

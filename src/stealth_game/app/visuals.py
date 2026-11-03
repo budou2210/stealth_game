@@ -24,12 +24,13 @@ from ..constants import (
     EXCLAIM_SCREEN_SIZE,
     EXCLAIM_TIME,
     ITEMS_PER_QUADRANT,
+    SOUND_WALL_MUFFLE,
 )
 from ..difficulty import DIFFICULTIES
 from ..grid import cell_center
 from ..guard import Guard
 from ..layout import EXIT_CELL, QUADRANTS
-from ..render.meshes import make_disc
+from ..render.meshes import make_disc, make_ring
 from ..theme import (
     CLOAK_PICKUP_COLOR,
     CONE_COLORS,
@@ -41,6 +42,8 @@ from ..theme import (
     EXCLAIM_COLOR,
     EXCLAIM_FRAME_COLOR,
     FLASH_PICKUP_COLOR,
+    NOISE_FILL_COLOR,
+    NOISE_RING_COLOR,
     SAFE_DOOR_COLOR,
     STATE_COLORS,
     STUN_COLOR,
@@ -81,11 +84,25 @@ class VisualsMixin:
         }
         self.player_np.setTransparency(TransparencyAttrib.MAlpha)
         self.disc = make_disc()
+        # 足音の範囲（走っている間だけ足元に出す）。輪＝届く距離、内側の薄い円＝壁越しでも届く距離
+        self.noise_ring = self.make_floor_overlay(make_ring(), NOISE_RING_COLOR)
+        self.noise_fill = self.make_floor_overlay(self.disc.copyTo(self.render), NOISE_FILL_COLOR)
         # 安全地帯の扉。外に出ると現れて、戻れなくなる
         self.door_nps = [
             self.add_box(self.render, (x, y, 0), (1, 1, WALL_HEIGHT), SAFE_DOOR_COLOR)
             for x, y in sorted(self.world.safe_doors)
         ]
+
+    def make_floor_overlay(self, node, color):
+        """床に重ねる半透明の図形。最初は隠しておく。"""
+        node.reparentTo(self.render)
+        node.setColor(*color)
+        node.setLightOff()
+        node.setTwoSided(True)
+        node.setTransparency(TransparencyAttrib.MAlpha)
+        node.setDepthWrite(False)
+        node.hide()
+        return node
 
     def make_guard_view(self):
         pivot = self.render.attachNewNode("guard")
@@ -244,3 +261,26 @@ class VisualsMixin:
             view["cone"].removeAllGeoms()
         self.update_decoy_views(dt)
         self.update_item_views(dt)
+        self.update_noise_view()
+
+    def noise_range_visible(self):
+        """足音の範囲を出すか：設定がオンで、プレイ中に安全地帯の外を走っているときだけ。"""
+        p = self.player
+        return self.show_noise_range and self.state == "play" and p.is_noisy() and not p.safe
+
+    def noise_radii(self):
+        """(届く距離, 壁越しでも届く距離)。鬼が追跡中のときは、実際にはこれより遠くまで聞こえる。"""
+        radius = self.difficulty.hear_radius
+        return radius, radius * SOUND_WALL_MUFFLE
+
+    def update_noise_view(self):
+        if not self.noise_range_visible():
+            self.noise_ring.hide()
+            self.noise_fill.hide()
+            return
+        outer, muffled = self.noise_radii()
+        x, y = self.player.x, self.player.y
+        for node, radius, z in ((self.noise_fill, muffled, 0.04), (self.noise_ring, outer, 0.045)):
+            node.show()
+            node.setPos(x, y, z)
+            node.setScale(radius)

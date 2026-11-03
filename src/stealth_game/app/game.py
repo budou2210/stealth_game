@@ -56,6 +56,7 @@ class StealthGame(
         self.box = make_unit_box()
         self.state = "menu"
         self.menu_index = DEFAULT_DIFFICULTY_INDEX
+        self.show_noise_range = True  # 設定：走ったときに足音の届く範囲を表示する（Fで切り替え）
         self.elapsed = 0.0
         self.item_cells = []
         self.items_collected = set()
@@ -127,6 +128,7 @@ class StealthGame(
         self.guards = self.make_guards(cfg)
         self.menu_title.hide()
         self.menu_text.hide()
+        self.set_play_hud_visible(True)
         self.reset_game()
 
     def restart_game(self):
