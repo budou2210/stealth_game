@@ -6,6 +6,7 @@ from direct.gui.DirectGui import DirectWaitBar
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import Filename, TextNode
 
+from ..constants import HELPER_MAX_HELD
 from ..texts import TEXTS
 from ..theme import FONT_CANDIDATES, MENU_TEXT_BG
 
@@ -38,10 +39,10 @@ class HudMixin:
             fg=(1, 0.9, 0.5, 1), shadow=(0, 0, 0, 1), align=TextNode.ALeft,
             mayChange=True, font=self.font,
         )
-        OnscreenText(
-            text=self.text["controls"], parent=self.a2dBottomLeft, pos=(0.05, 0.04),
+        self.controls_text = OnscreenText(
+            text="", parent=self.a2dBottomLeft, pos=(0.05, 0.04),
             scale=0.04, fg=(0.8, 0.8, 0.8, 1), shadow=(0, 0, 0, 1),
-            align=TextNode.ALeft, font=self.font,
+            align=TextNode.ALeft, mayChange=True, font=self.font,
         )
         OnscreenText(
             text=self.text["alert"], parent=self.a2dBottomCenter, pos=(-0.78, 0.115),
@@ -86,9 +87,24 @@ class HudMixin:
             )
         )
         self.hint_text.setText(self.text[self.hint_key()])
+        self.update_controls_text()
         top = max(guard.alert for guard in self.guards)
         self.alert_bar["value"] = top
         self.alert_bar["barColor"] = (min(1.0, 0.3 + top), max(0.1, 0.9 - top), 0.2, 1)
+
+    def controls_line(self):
+        """操作説明。プレイ中はその難易度で使えるお助けアイテムだけ、メニューでは全種類を載せる。"""
+        kinds = list(HELPER_MAX_HELD) if self.state == "menu" else self.helper_kinds()
+        parts = [self.text["controls_move"]]
+        parts += [self.text[f"{kind}_controls"] for kind in kinds]
+        parts.append(self.text["controls_system"])
+        return "  ".join(parts)
+
+    def update_controls_text(self):
+        """変わったときだけ書き換える（毎フレームの文字の作り直しを避ける）。"""
+        line = self.controls_line()
+        if line != self.controls_text.getText():
+            self.controls_text.setText(line)
 
     def helper_status(self):
         parts = [

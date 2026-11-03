@@ -14,10 +14,12 @@ TEXTS = {
         "hard_desc": "奴らはあなたの気配を嗅ぎつける。一瞬の油断が命取り。",
         "very_hard_desc": "逃げ道は、ほんのわずかしか残されていない。",
         "hell_desc": "あなたを助けるものは、何ひとつない。ようこそ、地獄へ。",
-        "controls": (
-            "WASD/矢印: 移動  Shift: 忍び足  E・.: 透明化  Q・/: スタン  Space・\\: 音の罠  Tab: 視点切替  "
-            "R: リスタート  M: 難易度  Esc: 終了"
-        ),
+        # 操作説明は「移動 → その難易度で使えるお助けアイテム → その他」の順につなげて表示する
+        "controls_move": "WASD/矢印: 移動  Shift: 忍び足",
+        "cloak_controls": "E・.: 透明化",
+        "flash_controls": "Q・/: スタン",
+        "decoy_controls": "Space・\\: 音の罠",
+        "controls_system": "Tab: 視点切替  R: リスタート  M: 難易度  Esc: 終了",
         "status": "[{level}]  アイテム {items}/{total}   時間 {time:.1f}秒{lives}{helpers}",
         "lives_status": "   ライフ {lives}",
         "cloak_status": "   透明化 {count}",
@@ -52,10 +54,11 @@ TEXTS = {
         "hard_desc": "They can sense you. One careless step is all it takes.",
         "very_hard_desc": "Only the narrowest escape routes remain.",
         "hell_desc": "Nothing here will help you. Welcome to Hell.",
-        "controls": (
-            "WASD/Arrows: move  Shift: sneak  E/.: cloak  Q//: stun  Space/\\: decoy  Tab: view  "
-            "R: restart  M: difficulty  Esc: quit"
-        ),
+        "controls_move": "WASD/Arrows: move  Shift: sneak",
+        "cloak_controls": "E/.: cloak",
+        "flash_controls": "Q//: stun",
+        "decoy_controls": "Space/\\: decoy",
+        "controls_system": "Tab: view  R: restart  M: difficulty  Esc: quit",
         "status": "[{level}]  Items {items}/{total}   Time {time:.1f}s{lives}{helpers}",
         "lives_status": "   Lives {lives}",
         "cloak_status": "   Cloaks {count}",
