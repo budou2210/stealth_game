@@ -3,6 +3,7 @@
 TEXTS = {
     "ja": {
         "title": "ステルスゲーム",
+        "title_prompt": "Enterキーでスタート",
         "menu_prompt": "難易度を選んでください（↑↓で選択、Enterで決定。1〜5キーでも選べます）",
         "easy": "簡単",
         "normal": "普通",
@@ -59,6 +60,7 @@ TEXTS = {
     },
     "en": {
         "title": "STEALTH GAME",
+        "title_prompt": "Press Enter to start",
         "menu_prompt": "Choose a difficulty (Up/Down + Enter, or press 1-5)",
         "easy": "Easy",
         "normal": "Normal",

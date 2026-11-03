@@ -18,6 +18,7 @@ PANDA_MODULES = [
     "direct",
     "direct.gui",
     "direct.gui.DirectGui",
+    "direct.gui.OnscreenImage",
     "direct.gui.OnscreenText",
     "direct.showbase",
     "direct.showbase.ShowBase",

@@ -39,11 +39,12 @@ from .helpers import HelperMixin
 from .hud import HudMixin
 from .input import InputMixin
 from .menu import MenuMixin
+from .title import TitleMixin
 from .visuals import VisualsMixin
 
 
 class StealthGame(
-    InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, HelperMixin, AudioMixin, ShowBase
+    InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, TitleMixin, HelperMixin, AudioMixin, ShowBase
 ):
     def __init__(self):
         loadPrcFileData("", "window-title Stealth Game\nwin-size 1100 800")
@@ -90,11 +91,12 @@ class StealthGame(
         self.set_doors_closed(False)
         self.setup_hud()
         self.setup_audio()
+        self.setup_title()
         self.overview_cache = {}
         self.snap_camera()
 
         self.bind_events()
-        self.open_menu()
+        self.open_title()
         self.taskMgr.add(self.update, "update")
 
     def make_guards(self, cfg):
@@ -140,7 +142,7 @@ class StealthGame(
         self.reset_game()
 
     def restart_game(self):
-        if self.state != "menu":
+        if self.state not in ("menu", "title"):
             self.start_game(self.difficulty)
 
     def reset_game(self):
@@ -376,7 +378,9 @@ class StealthGame(
     def step(self, dt):
         """1フレーム分の処理。一時停止中は時間・警備員・アイテムの回転などを全部止める。"""
         self.poll_action_keys()
-        if self.state == "play":
+        if self.state == "title":
+            self.update_title(dt)
+        elif self.state == "play":
             self.update_play(dt)
         elif self.state == "caught":
             self.update_caught(dt)

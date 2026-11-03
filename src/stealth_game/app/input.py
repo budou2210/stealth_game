@@ -64,6 +64,10 @@ class InputMixin:
             self.toggle_noise_range()
         if presses["pause"]:
             self.toggle_pause()
+        if self.state == "title":
+            if presses["confirm"]:
+                self.leave_title()
+            return
         if self.state == "menu":
             if presses["confirm"]:
                 self.choose_difficulty(None)

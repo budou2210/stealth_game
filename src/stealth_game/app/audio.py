@@ -145,7 +145,7 @@ class AudioMixin:
         return any(g.state == Guard.CHASE and not g.is_stunned() for g in self.guards)
 
     def wanted_bgm(self):
-        if self.state == "menu":
+        if self.state in ("title", "menu"):  # タイトル画面から難易度選択へは、同じ曲を流し続ける
             return "title"
         if self.state in ("win", "lose", "caught"):  # 捕まったら、流れている曲にかかわらず一旦止める
             return None
