@@ -1,0 +1,19 @@
+[project]
+name = "stealth-game"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Hiro", email = "351768405+budou2210@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "panda3d>=1.10.16",
+]
+
+[project.scripts]
+stealth-game = "stealth_game:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
