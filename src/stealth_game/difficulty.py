@@ -3,6 +3,8 @@
 import math
 from dataclasses import dataclass, replace
 
+from .constants import FLANK_MIN_DISTANCE
+
 
 @dataclass(frozen=True)
 class Difficulty:
@@ -31,6 +33,7 @@ class Difficulty:
     decoy_radius: float  # 音の罠が届く距離。0なら音の罠なし
     cloak: bool  # 透明化アイテムを出すか
     flash: bool  # スタン（アイテム）を出すか
+    flank_min_distance: float = FLANK_MIN_DISTANCE  # 挟み撃ち：プレイヤーからこれより遠い追っ手が回り込む
 
 
 # 難易度の詳細（メニューには雰囲気だけの説明を出し、中身はここに書く）
@@ -155,5 +158,25 @@ EASY = replace(
     lives=3,
 )
 
+# 隠し難易度：メニューで ←→←→←→ と入力すると、ゲームを閉じるまでメニューの末尾に出る。
+# 地獄をさらに強めたもの。応援は全員に届き、挟み撃ちは近くの追っ手も回り込み、より大きく遠回りする。
+ENDLESS_HELL = replace(
+    HELL,
+    key="endless_hell",
+    view_range=12.0,
+    view_half_angle=math.radians(100),  # 視野角200°
+    alert_gain=3.0,
+    hear_radius=9.0,
+    chase_speed=5.0,
+    search_speed=4.0,
+    chase_lead_factors=(0.5, 1.5, 2.2, 3.0),
+    ally_alert_radius=math.inf,  # 距離に関係なく全員を呼ぶ
+    ally_alert_max=0,
+    flank_avoid_cost=12,
+    flank_min_distance=3.0,
+    focus_rate=1.0,
+)
+
 DIFFICULTIES = [EASY, NORMAL, HARD, VERY_HARD, HELL]
+HIDDEN_DIFFICULTIES = [ENDLESS_HELL]
 DEFAULT_DIFFICULTY_INDEX = 1  # メニューで最初に選ばれている難易度（普通）
