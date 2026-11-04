@@ -11,3 +11,6 @@ wheels/
 
 # ゲームの記録（ベストタイムなど）
 saves/
+
+# 地獄ボットの結果（数が多いので GitHub には上げない）
+tools/hell_bot/results/
