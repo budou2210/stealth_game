@@ -2,6 +2,7 @@
 
 使い方（プロジェクトのフォルダで）:
     uv run python -m tools.hell_bot.run --attempts 20
+    uv run python -m tools.hell_bot.run --attempts 40 --workers 8   （8つ同時に挑戦する）
 
 結果は tools/hell_bot/results/ に保存する（GitHub には上げない）。
 - attempts.jsonl: 挑戦ごとの結果（1行に1回）
@@ -13,14 +14,14 @@
 import argparse
 import json
 import random
-import time
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from pathlib import Path
 
 from stealth_game.world import World
 
-from .danger import DangerMap, choose_seed, layout_score
-from .planner import Bot, encode_keys
-from .sim import DT, Sim
+from .danger import DangerMap, choose_seed
+from .sim import DT
+from .worker import attempt
 
 RESULTS = Path(__file__).resolve().parent / "results"
 SEED_POOL = range(0, 5000)  # この範囲の種（アイテムの配置）から選ぶ
@@ -32,46 +33,67 @@ def tried_seeds(path):
     return {json.loads(line)["seed"] for line in path.read_text(encoding="utf-8").splitlines() if line}
 
 
+def save_result(results, result, visited, keys, danger_map, danger_path, attempts_path):
+    danger_map.record(visited, tuple(result["fail_cell"]) if result["fail_cell"] else None)
+    danger_map.save(danger_path)
+    with attempts_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(result, ensure_ascii=False) + "\n")
+    record = {"seed": result["seed"], "dt": DT, "time": result["time"], "outcome": result["outcome"], "keys": keys}
+    folder = results / ("wins" if result["outcome"] == "win" else "runs")
+    folder.mkdir(exist_ok=True)
+    (folder / f"seed_{result['seed']}.json").write_text(json.dumps(record), encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser(description="地獄への挑戦をくり返す")
     parser.add_argument("--attempts", type=int, default=10, help="挑戦する回数")
+    parser.add_argument("--workers", type=int, default=1, help="同時に走らせる挑戦の数（PCのコア数まで）")
     parser.add_argument("--seed", type=int, help="この種だけを試す（選び分けをしない）")
+    parser.add_argument("--results", type=Path, default=RESULTS, help="結果を保存するフォルダ")
     args = parser.parse_args()
 
     world = World()
-    danger_path = RESULTS / "danger.json"
-    attempts_path = RESULTS / "attempts.jsonl"
+    results = args.results
+    danger_path = results / "danger.json"
+    attempts_path = results / "attempts.jsonl"
     danger_map = DangerMap.load(danger_path)
     tried = tried_seeds(attempts_path)
     rng = random.Random()
-    RESULTS.mkdir(parents=True, exist_ok=True)
+    results.mkdir(parents=True, exist_ok=True)
 
-    for n in range(args.attempts):
-        seed = args.seed if args.seed is not None else choose_seed(world, danger_map, SEED_POOL, tried, rng)
-        if seed is None:
-            print("試していない種がなくなりました")
-            break
-        tried.add(seed)
-        sim = Sim(seed, world=world)
-        score = layout_score(danger_map, sim.item_cells)
-        started = time.perf_counter()
-        bot = Bot(sim, danger_map)
-        result = bot.play()
-        result["layout_score"] = round(score, 3)
-        result["compute_seconds"] = round(time.perf_counter() - started, 1)
-        danger_map.record(bot.visited, tuple(result["fail_cell"]) if result["fail_cell"] else None)
-        danger_map.save(danger_path)
-        with attempts_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(result, ensure_ascii=False) + "\n")
-        record = {"seed": seed, "dt": DT, "time": result["time"], "outcome": result["outcome"], "keys": encode_keys(bot.log)}
-        folder = RESULTS / ("wins" if result["outcome"] == "win" else "runs")
-        folder.mkdir(exist_ok=True)
-        (folder / f"seed_{seed}.json").write_text(json.dumps(record), encoding="utf-8")
-        print(
-            f"[{n + 1}/{args.attempts}] 種 {seed}: {result['outcome']}  アイテム {result['items']}/8  "
-            f"ゲーム内 {result['time']}秒  計算 {result['compute_seconds']}秒  配置の点数 {result['layout_score']}",
-            flush=True,
-        )
+    def next_seed():
+        if args.seed is not None:
+            return args.seed
+        seed = choose_seed(world, danger_map, SEED_POOL, tried, rng)
+        if seed is not None:
+            tried.add(seed)
+        return seed
+
+    started = finished = 0
+    with ProcessPoolExecutor(max_workers=max(1, args.workers)) as pool:
+        running = set()
+        while started < args.attempts or running:
+            # 空いている分だけ新しい挑戦を始める（終わった挑戦の結果で更新した危険度の地図を使う）
+            while started < args.attempts and len(running) < args.workers:
+                seed = next_seed()
+                if seed is None:
+                    print("試していない種がなくなりました")
+                    args.attempts = started
+                    break
+                running.add(pool.submit(attempt, seed, danger_map))
+                started += 1
+            if not running:
+                break
+            done, running = wait(running, return_when=FIRST_COMPLETED)
+            for future in done:
+                result, visited, keys = future.result()
+                save_result(results, result, visited, keys, danger_map, danger_path, attempts_path)
+                finished += 1
+                print(
+                    f"[{finished}/{args.attempts}] 種 {result['seed']}: {result['outcome']}  アイテム {result['items']}/8  "
+                    f"ゲーム内 {result['time']}秒  計算 {result['compute_seconds']}秒  配置の点数 {result['layout_score']}",
+                    flush=True,
+                )
 
 
 if __name__ == "__main__":
