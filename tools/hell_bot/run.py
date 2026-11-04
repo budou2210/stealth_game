@@ -2,7 +2,8 @@
 
 使い方（プロジェクトのフォルダで）:
     uv run python -m tools.hell_bot.run --attempts 20
-    uv run python -m tools.hell_bot.run --attempts 40 --workers 8   （8つ同時に挑戦する）
+    uv run python -m tools.hell_bot.run --attempts 40 --workers 4   （同時に走らせる数を4にする。最初は8つ同時）
+    uv run python -m tools.hell_bot.run --attempts 8 --max-minutes 30   （1回の計算時間の上限を30分にする。最初は15分）
 
 結果は tools/hell_bot/results/ に保存する（GitHub には上げない）。
 - attempts.jsonl: 挑戦ごとの結果（1行に1回）
@@ -34,7 +35,7 @@ def tried_seeds(path):
 
 
 def save_result(results, result, visited, keys, danger_map, danger_path, attempts_path):
-    danger_map.record(visited, tuple(result["fail_cell"]) if result["fail_cell"] else None)
+    danger_map.record(visited, [tuple(c) for c in result["fail_cells"]])
     danger_map.save(danger_path)
     with attempts_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(result, ensure_ascii=False) + "\n")
@@ -47,9 +48,10 @@ def save_result(results, result, visited, keys, danger_map, danger_path, attempt
 def main():
     parser = argparse.ArgumentParser(description="地獄への挑戦をくり返す")
     parser.add_argument("--attempts", type=int, default=10, help="挑戦する回数")
-    parser.add_argument("--workers", type=int, default=1, help="同時に走らせる挑戦の数（PCのコア数まで）")
+    parser.add_argument("--workers", type=int, default=8, help="同時に走らせる挑戦の数（最初は8。PCのコア数まで）")
     parser.add_argument("--seed", type=int, help="この種だけを試す（選び分けをしない）")
     parser.add_argument("--results", type=Path, default=RESULTS, help="結果を保存するフォルダ")
+    parser.add_argument("--max-minutes", type=float, default=15.0, help="1回の挑戦の計算時間の上限（分）。超えたら打ち切る")
     args = parser.parse_args()
 
     world = World()
@@ -80,7 +82,7 @@ def main():
                     print("試していない種がなくなりました")
                     args.attempts = started
                     break
-                running.add(pool.submit(attempt, seed, danger_map))
+                running.add(pool.submit(attempt, seed, danger_map, args.max_minutes * 60))
                 started += 1
             if not running:
                 break
@@ -90,7 +92,7 @@ def main():
                 save_result(results, result, visited, keys, danger_map, danger_path, attempts_path)
                 finished += 1
                 print(
-                    f"[{finished}/{args.attempts}] 種 {result['seed']}: {result['outcome']}  アイテム {result['items']}/8  "
+                    f"[{finished}/{args.attempts}] 種 {result['seed']}: {result['outcome']}  アイテム {result['items']}/8（最高 {result['best_items']}）  巻き戻し {result['rewinds']}回  "
                     f"ゲーム内 {result['time']}秒  計算 {result['compute_seconds']}秒  配置の点数 {result['layout_score']}",
                     flush=True,
                 )

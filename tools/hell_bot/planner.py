@@ -6,29 +6,41 @@
   「警備員が向こうを向くまで待ってから進む」のような、タイミングを計る動きが見つかる。
 - 8個目（最後のアイテム）を拾う前に、拾ってから出口に着くまでの競走を最後まで試す。
   勝てると分かったら、その試した入力をそのまま実行する（シミュレーターは本物と同じ動きをするので確実）。
-  勝てなければ、手前の見つからない場所で待ちながら試し直す。
+  勝てなければ、少し離れた見つからない場所で待ちながら試し直す（近くで待つと紫が集まってくる）。
+- 捕まったり行き詰まったりしたら、少し前に保存した状態へ巻き戻してやり直す。
+  やり直すたびに「少し待ってから動く」「目標のアイテムの順番を入れ替える」などで、前と違う動きをする。
+  最後に残る記録は、成功した流れだけになる。
+- 目標のアイテムに近づけない状態が続いたら、別のアイテムを先に取りに行く。
 """
 
 import heapq
 import math
+import time
 
 from stealth_game.grid import manhattan, world_to_cell
 from stealth_game.guard import Guard
 from stealth_game.layout import EXIT_CELL
 
 from .sim import DT
-from .spacetime import SAMPLE_FRAMES, SLOT_SAMPLES, danger_schedule, plan_path
+from .spacetime import RUN, SAMPLE_FRAMES, SLOT_SAMPLES, SNEAK, danger_schedule, plan_path
 
 SEGMENT_FRAMES = 12  # 1区切りのコマ数（0.4秒）。この間は同じ動きを続ける
 DEPTH = 6  # 何区切り先まで試すか（2.4秒）
 BEAM = 4  # 区切りごとに残す流れの数
 RUN_CLEARANCE = 1.0  # 足音の届く距離＋これ以内に警備員がいるときは走らない
 DANGER_WEIGHT = 6.0  # 経路で、危険度の高いマスをどれだけ避けるか
-STAGING_DISTANCE = 2.5  # 最後のアイテムの手前で待つ距離（距離の地図の値）
-RACE_CHECK_DISTANCE = 6.0  # 最後のアイテムまでこの距離以内なら、競走を試す
+STAGING_DISTANCE = 2.5  # 最後のアイテムの手前で待つ距離（予備の探索方法で使う。距離の地図の値）
+LAST_ITEM_WAIT_DISTANCE = 6.0  # 最後のアイテムに、これより近づいて待たない（紫が集まってくるので）
+LAST_ITEM_KEEP_OUT = 2  # 最後のアイテムから、この歩数以内のマスには、競走を始めるまで入らない
 RACE_LIMIT_FRAMES = 30 * 40  # 競走を試すときの上限（40秒）
 STUCK_SECONDS = 120  # この秒数アイテムを拾えなければ、その配置はあきらめる
-TIME_LIMIT_SECONDS = 900
+TIME_LIMIT_SECONDS = 900  # ゲーム内の時間の上限
+CHECKPOINT_SECONDS = 5.0  # この秒数ごとに状態を保存する（巻き戻し用）
+REWIND_MARGIN = 3.0  # 捕まったら、最初に見つかった時刻のこれだけ前より前の保存点へ戻る
+STUCK_REWIND = 30.0  # 行き詰まったら、これだけ前より前の保存点へ戻る
+MAX_TRIES_PER_CHECKPOINT = 4  # 同じ保存点からやり直す回数の上限（超えたらもっと前へ戻る）
+MAX_REWINDS = 60  # 1回の挑戦で巻き戻せる回数の上限
+NO_PROGRESS_SECONDS = 25.0  # 目標のアイテムにこの秒数近づけなければ、別のアイテムを先にする
 EXECUTE_SLOTS = 2  # 時間と場所の経路のうち、確かめてから実行する区切りの数（1秒）
 FUTURE_CHECK_SLOTS = 8  # 実行した後も、この区切り数（4秒）は逃げ続けられることを確かめる
 SLOT_FRAMES = SAMPLE_FRAMES * SLOT_SAMPLES
@@ -184,6 +196,12 @@ class Bot:
         self.last_collect_time = 0.0
         self.race_keys = None  # 勝てると分かった競走の入力（あれば、これをそのまま実行する）
         self.stats = {"spacetime": 0, "beam": 0}  # どちらの方法で動いたかの回数
+        self.spotted_time = None  # 今の流れで最初に見つかった時刻
+        self.hold_slots = 0  # 巻き戻した直後に、その場で待つ区切りの数（前と違う動きにするため）
+        self.progress = (None, math.inf, 0.0)  # (目標のアイテム, 一番近づいた距離, そのときの時刻)
+        self.checkpoints = []
+        self.failures = []  # 巻き戻す前に見つかった（捕まった）マス（危険度の地図に使う）
+        self.rewinds = 0
 
     # --- 経路 -----------------------------------------------------------
     def field(self, target):
@@ -208,6 +226,22 @@ class Bot:
 
     def remaining(self):
         return [i for i in self.order if i not in self.sim.items_collected]
+
+    def demote_target(self):
+        """今の目標のアイテムを、次のアイテムの後ろに回す（最後の2個なら、どちらを最後にするかが入れ替わる）。"""
+        remaining = self.remaining()
+        if len(remaining) < 2:
+            return
+        first, second = remaining[0], remaining[1]
+        self.order.remove(first)
+        self.order.insert(self.order.index(second) + 1, first)
+        self.progress = (None, math.inf, self.sim.elapsed)
+
+    def keep_out_cells(self, item_cell):
+        """競走を始めるまで入らないマス（最後のアイテムの周り）。"""
+        x, y = item_cell
+        r = LAST_ITEM_KEEP_OUT
+        return frozenset((x + dx, y + dy) for dx in range(-r, r + 1) for dy in range(-r, r + 1) if abs(dx) + abs(dy) <= r)
 
     # --- 未来を試す -----------------------------------------------------
     def progress_value(self, sim, field, staging):
@@ -319,15 +353,15 @@ class Bot:
                 return keys_log
         return None
 
-    def check_cells(self, cells, forbidden):
-        """区切りごとのマスの列を、本物どおりに実行してみる。見つからなければ (入力の列, 実行後の状態)。"""
+    def check_cells(self, steps, forbidden):
+        """区切りごとの (マス, 歩き方) の列を、本物どおりに実行してみる。見つからなければ (入力の列, 実行後の状態)。"""
         s = self.sim.snapshot()
         known = {g.spawn: g.last_known for g in s.guards}
         avoid = forbidden_items(self, forbidden)
         keys_log = []
-        for cell in cells:
+        for cell, mode in steps:
             for _ in range(SLOT_FRAMES):
-                keys = keys_for(toward(s.player.x, s.player.y, cell), sneak=True)
+                keys = keys_for(toward(s.player.x, s.player.y, cell), sneak=(mode != RUN))
                 s.step(keys)
                 keys_log.append(keys)
                 spotted, alert, _ = threat(s)
@@ -347,28 +381,46 @@ class Bot:
     # --- 1回の判断 ------------------------------------------------------
     def decide(self):
         """次に押す入力の列を返す。競走に勝てる入力が見つかったら None（race_keys に入れる）。"""
+        self.check_progress()
         remaining = self.remaining()
         target_index = remaining[0]
         target_cell = self.sim.item_cells[target_index]
         field = self.field(target_cell)
-        if len(remaining) > 1:
-            keys = self.spacetime_keys(field)
-            if keys:
-                self.stats["spacetime"] += 1
-                return keys
-            self.stats["beam"] += 1
-            return self.beam_keys(self.search(field), field)
-        if field.value(self.sim.player.x, self.sim.player.y) <= RACE_CHECK_DISTANCE:
-            race = self.try_race(target_index)
+        last = len(remaining) == 1
+        if last:
+            race = self.try_race(target_index)  # どこにいても、今走れば勝てるかを試す
             if race is not None:
                 self.race_keys = race
                 return None
-        keys = self.spacetime_keys(field, forbidden=frozenset({target_cell}), floor_value=STAGING_DISTANCE)
+        forbidden = self.keep_out_cells(target_cell) if last else frozenset()
+        if self.hold_slots > 0:  # 巻き戻した直後は、見つからなければ少しその場で待つ
+            self.hold_slots -= 1
+            here = world_to_cell(self.sim.player.x, self.sim.player.y)
+            result = self.check_cells([(here, SNEAK)], forbidden)
+            if result is not None:
+                return result[0]
+        if last:
+            keys = self.spacetime_keys(field, forbidden=forbidden, floor_value=LAST_ITEM_WAIT_DISTANCE)
+        else:
+            keys = self.spacetime_keys(field)
         if keys:
             self.stats["spacetime"] += 1
             return keys
         self.stats["beam"] += 1
-        return self.beam_keys(self.search(field, avoid_item=target_index, staging=True), field)
+        if last:
+            return self.beam_keys(self.search(field, avoid_item=target_index, staging=True), field)
+        return self.beam_keys(self.search(field), field)
+
+    def check_progress(self):
+        """目標のアイテムに長く近づけていなければ、別のアイテムを先にする。"""
+        remaining = self.remaining()
+        target = remaining[0]
+        value = self.field(self.sim.item_cells[target]).value(self.sim.player.x, self.sim.player.y)
+        best_target, best_value, since = self.progress
+        if target != best_target or value < best_value - 0.5:
+            self.progress = (target, value, self.sim.elapsed)
+        elif len(remaining) > 1 and self.sim.elapsed - since > NO_PROGRESS_SECONDS:
+            self.demote_target()
 
     def beam_keys(self, move, field):
         """ビームサーチで選んだ動きを1区切りぶん、入力の列にする（実際の状態に合わせて1コマずつ決める）。"""
@@ -389,34 +441,106 @@ class Bot:
         self.visited.append(world_to_cell(self.sim.player.x, self.sim.player.y))
         if self.fail_cell is None and threat(self.sim)[0]:
             self.fail_cell = self.visited[-1]  # 最初に見つかった場所
+            self.spotted_time = self.sim.elapsed
         if len(self.sim.items_collected) > before:
             self.last_collect_time = self.sim.elapsed
 
-    def play(self, on_progress=None):
-        """1回の挑戦を最後まで進め、結果を返す。"""
-        sim = self.sim
+    # --- 巻き戻し -------------------------------------------------------
+    def save_checkpoint(self):
+        self.checkpoints.append({
+            "time": self.sim.elapsed,
+            "sim": self.sim.snapshot(),
+            "log": len(self.log),
+            "visited": len(self.visited),
+            "order": list(self.order),
+            "last_collect_time": self.last_collect_time,
+            "progress": self.progress,
+            "tries": 0,
+        })
+
+    def rewind(self, failure):
+        """failure（"lose" か "stuck"）の前の保存点へ戻る。戻れたら True。"""
+        if self.rewinds >= MAX_REWINDS:
+            return False
+        if failure == "lose":
+            target = (self.spotted_time if self.spotted_time is not None else self.sim.elapsed) - REWIND_MARGIN
+        else:
+            target = self.sim.elapsed - STUCK_REWIND
+        while self.checkpoints:
+            cp = self.checkpoints[-1]
+            if cp["time"] <= target and cp["tries"] < MAX_TRIES_PER_CHECKPOINT:
+                break
+            self.checkpoints.pop()  # 失敗した流れの保存点と、やり直し尽くした保存点は捨てる
+        else:
+            return False
+        if self.fail_cell is not None:
+            self.failures.append(self.fail_cell)
+        self.sim = cp["sim"].snapshot()  # 保存点そのものは、次のやり直し用に残しておく
+        del self.log[cp["log"]:]
+        del self.visited[cp["visited"]:]
+        self.order = list(cp["order"])
+        self.last_collect_time = cp["last_collect_time"]
+        self.progress = cp["progress"]
+        self.fail_cell = None
+        self.spotted_time = None
+        self.race_keys = None
+        cp["tries"] += 1
+        self.hold_slots = cp["tries"]  # やり直すたびに、少しずつ長く待ってから動く
+        if cp["tries"] % 2 == 0:
+            self.demote_target()  # 2回に1回は、アイテムの順番も変える
+        self.rewinds += 1
+        return True
+
+    def play(self, on_progress=None, max_compute_seconds=None):
+        """1回の挑戦を最後まで進め、結果を返す（捕まったり行き詰まったりしたら巻き戻してやり直す）。
+
+        max_compute_seconds: 計算時間の上限（秒）。超えたらそこで打ち切る（結果は "time_limit"）。
+        """
         outcome = None
-        while not sim.done:
-            if sim.elapsed > TIME_LIMIT_SECONDS:
+        best_items = 0
+        started = time.perf_counter()
+        self.save_checkpoint()
+        while True:
+            sim = self.sim
+            best_items = max(best_items, len(sim.items_collected))
+            if sim.state == "win":
+                outcome = "win"
+                break
+            failure = None
+            if sim.state == "lose":
+                failure = "lose"
+            elif sim.elapsed - self.last_collect_time > STUCK_SECONDS:
+                failure = "stuck"
+            elif sim.elapsed > TIME_LIMIT_SECONDS or (
+                    max_compute_seconds is not None and time.perf_counter() - started > max_compute_seconds):
                 outcome = "time_limit"
                 break
-            if sim.elapsed - self.last_collect_time > STUCK_SECONDS:
-                outcome = "stuck"
-                break
+            if failure:
+                if not self.rewind(failure):
+                    outcome = failure
+                    break
+                continue
+            if sim.elapsed >= self.checkpoints[-1]["time"] + CHECKPOINT_SECONDS:
+                self.save_checkpoint()
             if self.race_keys:
                 for keys in self.race_keys:
                     self.apply(keys)
-                break
+                    if self.sim.done:
+                        break
+                self.race_keys = None
+                continue
             keys_log = self.decide()
             if keys_log is None:
                 continue  # 競走に勝てる入力が見つかった（次のループで実行する）
             for keys in keys_log:
                 self.apply(keys)
-                if sim.done:
+                if self.sim.done:
                     break
             if on_progress:
                 on_progress(self, keys_log)
-        outcome = outcome or sim.state
+        sim = self.sim
+        if outcome != "win" and self.fail_cell is not None:
+            self.failures.append(self.fail_cell)
         fail_cell = None
         if outcome != "win" and self.visited:
             fail_cell = self.fail_cell or self.visited[-1]
@@ -425,7 +549,10 @@ class Bot:
             "outcome": outcome,
             "time": round(sim.elapsed, 2),
             "items": len(sim.items_collected),
+            "best_items": best_items,
             "fail_cell": list(fail_cell) if fail_cell else None,
+            "fail_cells": [list(c) for c in self.failures],
+            "rewinds": self.rewinds,
             "frames": len(self.log),
             "moves": dict(self.stats),
         }

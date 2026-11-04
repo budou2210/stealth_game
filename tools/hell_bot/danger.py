@@ -49,13 +49,15 @@ class DangerMap:
         visits = self.visits.get(cell, 0)
         return (fails + prior * PRIOR_WEIGHT) / (visits + PRIOR_WEIGHT)
 
-    def record(self, visited_cells, fail_cell):
-        """1回の挑戦の結果。visited_cells＝通ったマス、fail_cell＝見つかった（捕まった）マス。成功ならNone。"""
+    def record(self, visited_cells, fail_cells):
+        """1回の挑戦の結果。visited_cells＝通ったマス、fail_cells＝見つかった（捕まった）マスの列（巻き戻す前の失敗も含む）。"""
         self.attempts += 1
         for cell in set(visited_cells):
             self.visits[cell] = self.visits.get(cell, 0) + 1
-        if fail_cell is None:
-            return
+        for cell in fail_cells:
+            self.record_failure(cell)
+
+    def record_failure(self, fail_cell):
         fx, fy = fail_cell
         for dx in range(-FAIL_SPREAD, FAIL_SPREAD + 1):
             for dy in range(-FAIL_SPREAD, FAIL_SPREAD + 1):

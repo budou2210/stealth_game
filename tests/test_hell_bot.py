@@ -149,3 +149,31 @@ def test_replay_pause_keeps_record_in_sync(game_class):
     for _ in range(80):
         paused.advance()
     assert snapshot_of(paused) == snapshot_of(straight)
+
+
+def test_rewind_keeps_only_the_successful_branch():
+    """巻き戻した後の記録を最初から再生すると、ボットの今の状態とぴったり一致する（失敗した流れが混ざらない）。"""
+    from hell_bot.danger import DangerMap
+    from hell_bot.planner import Bot
+    from hell_bot.sim import Sim
+
+    bot = Bot(Sim(8), DangerMap())
+    bot.save_checkpoint()
+    for frame in range(150):
+        bot.apply(frozenset(scripted_keys(frame)))
+    bot.save_checkpoint()
+    checkpoint_time = bot.sim.elapsed
+    for frame in range(150, 400):  # この流れは捨てられる
+        bot.apply(frozenset({"right"}))
+    bot.sim.elapsed += 40  # 行き詰まったことにする（30秒より前の保存点へ戻る）
+    assert bot.rewind("stuck")
+    assert bot.sim.elapsed == checkpoint_time
+    assert len(bot.log) == 150
+    assert bot.hold_slots == 1, "やり直すときは少し待ってから動く"
+    for frame in range(150, 300):
+        bot.apply(frozenset(scripted_keys(frame)))
+
+    fresh = Sim(8)
+    for keys in bot.log:
+        fresh.step(keys)
+    assert snapshot_of(fresh) == snapshot_of(bot.sim)
