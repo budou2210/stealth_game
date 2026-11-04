@@ -4,11 +4,12 @@
     uv run python -m tools.hell_bot.run --attempts 20
     uv run python -m tools.hell_bot.run --attempts 40 --workers 4   （同時に走らせる数を4にする。最初は8つ同時）
     uv run python -m tools.hell_bot.run --attempts 8 --max-minutes 30   （1回の計算時間の上限を30分にする。最初は15分）
+    uv run python -m tools.hell_bot.run --attempts 8 --variants 3   （同じ配置を、動きを少し変えてさらに3通り試し、一番速いクリアを残す）
 
 結果は tools/hell_bot/results/ に保存する（GitHub には上げない）。
 - attempts.jsonl: 挑戦ごとの結果（1行に1回）
 - danger.json: 危険度の地図（次回の実行はここから続ける）
-- wins/seed_<種>.json: クリアできた回の入力の記録（replay.py で本物のゲーム画面で再生できる）
+- wins/seed_<種>.json: クリアできた回の入力の記録（replay.py で本物のゲーム画面で再生できる）。同じ種で何度もクリアしたら一番速い回を残す
 - runs/seed_<種>.json: クリアできなかった回の入力の記録（どこで失敗したかを見る用）
 - errors.log: 挑戦の途中でエラーが起きたときの内容（その挑戦だけ飛ばして、ほかは続ける）
 """
@@ -42,10 +43,16 @@ def save_result(results, result, visited, keys, danger_map, danger_path, attempt
     danger_map.save(danger_path)
     with attempts_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(result, ensure_ascii=False) + "\n")
-    record = {"seed": result["seed"], "dt": DT, "time": result["time"], "outcome": result["outcome"], "keys": keys}
-    folder = results / ("wins" if result["outcome"] == "win" else "runs")
+    record = {"seed": result["seed"], "dt": DT, "time": result["time"], "outcome": result["outcome"],
+              "variant": result.get("variant", 0), "keys": keys}
+    win = result["outcome"] == "win"
+    folder = results / ("wins" if win else "runs")
     folder.mkdir(exist_ok=True)
-    (folder / f"seed_{result['seed']}.json").write_text(json.dumps(record), encoding="utf-8")
+    path = folder / f"seed_{result['seed']}.json"
+    if win and path.exists() and json.loads(path.read_text(encoding="utf-8"))["time"] <= result["time"]:
+        return False  # 前のクリアのほうが速い
+    path.write_text(json.dumps(record), encoding="utf-8")
+    return win
 
 
 def main():
@@ -55,6 +62,8 @@ def main():
     parser.add_argument("--seed", type=int, help="この種だけを試す（選び分けをしない）")
     parser.add_argument("--results", type=Path, default=RESULTS, help="結果を保存するフォルダ")
     parser.add_argument("--max-minutes", type=float, default=15.0, help="1回の挑戦の計算時間の上限（分）。超えたら打ち切る")
+    parser.add_argument("--variants", type=int, default=0,
+                        help="同じ配置を、動きを少し変えてさらに何通り試すか（一番速いクリアを残す。計算は 1+この数 倍かかる）")
     args = parser.parse_args()
 
     world = World()
@@ -74,18 +83,24 @@ def main():
             tried.add(seed)
         return seed
 
+    jobs_per_seed = 1 + max(0, args.variants)
+    total = args.attempts * jobs_per_seed  # 挑戦の数（1つの配置につき 1+variants 回）
+    queue = []  # まだ始めていない (種, 動きの番号)
     started = finished = 0
     with ProcessPoolExecutor(max_workers=max(1, args.workers)) as pool:
         running = {}  # {挑戦: 種}
-        while started < args.attempts or running:
+        while started < total or running:
             # 空いている分だけ新しい挑戦を始める（終わった挑戦の結果で更新した危険度の地図を使う）
-            while started < args.attempts and len(running) < args.workers:
-                seed = next_seed()
-                if seed is None:
-                    print("試していない種がなくなりました")
-                    args.attempts = started
-                    break
-                running[pool.submit(attempt, seed, danger_map, args.max_minutes * 60)] = seed
+            while started < total and len(running) < args.workers:
+                if not queue:
+                    seed = next_seed()
+                    if seed is None:
+                        print("試していない種がなくなりました")
+                        total = started
+                        break
+                    queue = [(seed, v) for v in range(jobs_per_seed)]
+                seed, variant = queue.pop(0)
+                running[pool.submit(attempt, seed, danger_map, args.max_minutes * 60, variant)] = seed
                 started += 1
             if not running:
                 break
@@ -101,12 +116,13 @@ def main():
                     finished += 1
                     with (results / "errors.log").open("a", encoding="utf-8") as f:
                         f.write(f"種 {seed}\n{traceback.format_exc()}\n")
-                    print(f"[{finished}/{args.attempts}] 種 {seed}: エラー（内容は errors.log。ほかの挑戦は続けます）", flush=True)
+                    print(f"[{finished}/{total}] 種 {seed}: エラー（内容は errors.log。ほかの挑戦は続けます）", flush=True)
                     continue
-                save_result(results, result, visited, keys, danger_map, danger_path, attempts_path)
+                best = save_result(results, result, visited, keys, danger_map, danger_path, attempts_path)
                 finished += 1
+                variant = f"（動き{result['variant']}）" if jobs_per_seed > 1 else ""
                 print(
-                    f"[{finished}/{args.attempts}] 種 {result['seed']}: {result['outcome']}  アイテム {result['items']}/8（最高 {result['best_items']}）  巻き戻し {result['rewinds']}回  "
+                    f"[{finished}/{total}] 種 {result['seed']}{variant}: {result['outcome']}{'（この種の最速）' if best else ''}  アイテム {result['items']}/8（最高 {result['best_items']}）  巻き戻し {result['rewinds']}回  "
                     f"ゲーム内 {result['time']}秒  計算 {result['compute_seconds']}秒  配置の点数 {result['layout_score']}",
                     flush=True,
                 )

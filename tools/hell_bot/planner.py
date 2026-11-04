@@ -15,12 +15,15 @@
 
 import heapq
 import math
+import random
 import time
 
+from stealth_game.constants import PLAYER_RADIUS
 from stealth_game.grid import manhattan, world_to_cell
 from stealth_game.guard import Guard
 from stealth_game.layout import EXIT_CELL
 
+from .options import enabled
 from .sim import DT
 from .spacetime import RUN, SAMPLE_FRAMES, SLOT_SAMPLES, SNEAK, danger_schedule, plan_path
 
@@ -44,6 +47,7 @@ NO_PROGRESS_SECONDS = 25.0  # 目標のアイテムにこの秒数近づけな�
 EXECUTE_SLOTS = 2  # 時間と場所の経路のうち、確かめてから実行する区切りの数（1秒）
 FUTURE_CHECK_SLOTS = 8  # 実行した後も、この区切り数（4秒）は逃げ続けられることを確かめる
 SLOT_FRAMES = SAMPLE_FRAMES * SLOT_SAMPLES
+SMOOTH_AHEAD = 2 if enabled("S2") else 1  # 滑らかに動くとき、経路の何区切り先のマスまで近道してよいか（2は斜めの近道が増えるが、予定とずれやすい）
 VALID_ALERT = 0.5  # 確かめるとき、警戒度がこれを超えたら実行しない
 
 # 点数の重み
@@ -184,10 +188,15 @@ class Node:
 
 
 class Bot:
-    def __init__(self, sim, danger_map):
+    def __init__(self, sim, danger_map, variant=0):
+        """variant: 0 なら標準の動き。1以上なら、経路の重みやアイテムの順番を少しだけ変えた動きにする
+        （同じ配置を何通りも試して、一番速いクリアを残すため）。"""
         self.sim = sim
         self.danger_map = danger_map
         self.world = sim.world
+        self.variant = variant
+        self.rng = random.Random(variant * 1000003 + sim.seed)  # ゲームの乱数とは別（ボットの判断のゆらぎ用）
+        self.danger_weight = DANGER_WEIGHT * (0.5 + self.rng.random()) if variant else DANGER_WEIGHT
         self.log = []  # 実行した入力（1コマずつ）
         self.visited = []
         self.fail_cell = None
@@ -206,7 +215,7 @@ class Bot:
     # --- 経路 -----------------------------------------------------------
     def field(self, target):
         if target not in self.fields:
-            self.fields[target] = Field(self.world, target, self.danger_map)
+            self.fields[target] = Field(self.world, target, self.danger_map, self.danger_weight)
         return self.fields[target]
 
     def plan_order(self):
@@ -222,7 +231,34 @@ class Bot:
             order.append(nxt)
             rest.remove(nxt)
             here = self.sim.item_cells[nxt]
+        if enabled("D"):
+            order = self.shorten_order(order, last)
+        if self.variant:  # ゆらぎ：となり合う2つを、ときどき入れ替える
+            for k in range(len(order) - 1):
+                if self.rng.random() < 0.25:
+                    order[k], order[k + 1] = order[k + 1], order[k]
         return order + [last]
+
+    def route_length(self, order, last):
+        """スタート → order の順 → last → 出口 の道のり（危険度の重みつき）。"""
+        cells = [world_to_cell(self.sim.player.x, self.sim.player.y)]
+        cells += [self.sim.item_cells[i] for i in order + [last]] + [EXIT_CELL]
+        return sum(self.field(b).dist.get(a, math.inf) for a, b in zip(cells, cells[1:]))
+
+    def shorten_order(self, order, last):
+        """順番の一部を逆向きにする組み替え（2-opt）を、道のりが短くならなくなるまでくり返す。"""
+        best = list(order)
+        best_len = self.route_length(best, last)
+        improved = True
+        while improved:
+            improved = False
+            for a in range(len(best) - 1):
+                for b in range(a + 1, len(best)):
+                    cand = best[:a] + best[a:b + 1][::-1] + best[b + 1:]
+                    length = self.route_length(cand, last)
+                    if length < best_len - 1e-9:
+                        best, best_len, improved = cand, length, True
+        return best
 
     def remaining(self):
         return [i for i in self.order if i not in self.sim.items_collected]
@@ -339,29 +375,68 @@ class Bot:
         path = plan_path(self.world, here, danger_schedule(self.sim), field, forbidden, floor_value)
         if not path:
             return None
-        for slots in (EXECUTE_SLOTS, 1):
-            result = self.check_cells(path[:slots], forbidden)
-            if result is None:
-                continue
-            keys_log, after = result
-            if after.done:
-                return keys_log
-            after_here = world_to_cell(after.player.x, after.player.y)
-            future = plan_path(self.world, after_here, danger_schedule(after, FUTURE_CHECK_SLOTS),
-                               field, forbidden, floor_value)
-            if future and len(future) >= FUTURE_CHECK_SLOTS:
-                return keys_log
+        # まずは滑らかな動き方（止まらずに進み、斜めに近道する）で試し、だめなら経路どおりの動き方で試す
+        for smooth in (True, False):
+            for slots in (EXECUTE_SLOTS, 1):
+                result = self.check_cells(path[:slots], forbidden, following=path[slots:], smooth=smooth)
+                if result is None:
+                    continue
+                keys_log, after = result
+                if after.done:
+                    return keys_log
+                after_here = world_to_cell(after.player.x, after.player.y)
+                future = plan_path(self.world, after_here, danger_schedule(after, FUTURE_CHECK_SLOTS),
+                                   field, forbidden, floor_value)
+                if future and len(future) >= FUTURE_CHECK_SLOTS:
+                    return keys_log
         return None
 
-    def check_cells(self, steps, forbidden):
-        """区切りごとの (マス, 歩き方) の列を、本物どおりに実行してみる。見つからなければ (入力の列, 実行後の状態)。"""
+    def steer(self, s, path, i, forbidden):
+        """滑らかに動くときの、今向かうマスと走るかどうか。
+
+        経路の i 番目の区切りのマスへ向かう代わりに、その先（SMOOTH_AHEAD 区切り先まで）のマスへ
+        壁に当たらずまっすぐ行けるなら、そちらへ向かう。こうすると、マスの中心で止まらずに進み続け、
+        「右・上・右・上」の階段は斜めの直進になる。経路が「その場で待つ」ところより先へは行かない。
+        """
+        px, py = s.player.x, s.player.y
+        best = i
+        for j in range(i + 1, min(i + 1 + SMOOTH_AHEAD, len(path))):
+            if path[j][0] == path[j - 1][0]:
+                break  # 経路はここで待つ
+            if not self.straight_clear(px, py, path[j][0], forbidden):
+                break
+            best = j
+        run = path[i][1] == RUN  # 歩き方は今の区切りに従う（先が忍び足でも、今の区切りが走るなら走る）
+        return path[best][0], run
+
+    def straight_clear(self, x, y, cell, forbidden):
+        """(x, y) から cell の中心まで、体が壁に当たらず、入ってはいけないマスも通らずに、まっすぐ行けるか。"""
+        tx, ty = cell[0] + 0.5, cell[1] + 0.5
+        dist = math.hypot(tx - x, ty - y)
+        steps = max(1, int(dist / 0.2))
+        for k in range(1, steps + 1):
+            cx, cy = x + (tx - x) * k / steps, y + (ty - y) * k / steps
+            if self.world.is_blocked(cx, cy, PLAYER_RADIUS + 0.05) or world_to_cell(cx, cy) in forbidden:
+                return False
+        return True
+
+    def check_cells(self, steps, forbidden, following=(), smooth=False):
+        """区切りごとの (マス, 歩き方) の列を、本物どおりに実行してみる。見つからなければ (入力の列, 実行後の状態)。
+
+        following: その先の経路（滑らかに動くとき、次へ向かうために見る）。smooth: 滑らかに動くか。
+        """
         s = self.sim.snapshot()
         known = {g.spawn: g.last_known for g in s.guards}
         avoid = forbidden_items(self, forbidden)
+        path = list(steps) + list(following)
         keys_log = []
-        for cell, mode in steps:
+        for i, (cell, mode) in enumerate(steps):
             for _ in range(SLOT_FRAMES):
-                keys = keys_for(toward(s.player.x, s.player.y, cell), sneak=(mode != RUN))
+                if smooth:
+                    target, run = self.steer(s, path, i, forbidden)
+                else:
+                    target, run = cell, mode == RUN
+                keys = keys_for(toward(s.player.x, s.player.y, target), sneak=not run)
                 s.step(keys)
                 keys_log.append(keys)
                 spotted, alert, _ = threat(s)

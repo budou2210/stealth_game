@@ -1,0 +1,16 @@
+"""試験用の切り替えスイッチ。環境変数 BOT_OPTIONS に、使う工夫の記号をカンマ区切りで書く（例: BOT_OPTIONS=C,D）。
+
+- A: 配置を選ぶとき、アイテムを回る道のりが短い配置を優先する
+- S2: 滑らかに動くとき、2区切り先まで近道する（標準は1区切り先まで）
+- C: 時間と場所の経路で、同じくらい目標に近づけるなら、早く着ける経路を選ぶ
+- D: アイテムを集める順番を、全体の道のりが短くなるように組み替える
+（E「余裕を小さくする」は効果が大きかったので標準にした。C・D はタイムが縮まなかったので標準にはしていない）
+"""
+
+import os
+
+ENABLED = {name.strip().upper() for name in os.environ.get("BOT_OPTIONS", "").split(",") if name.strip()}
+
+
+def enabled(name):
+    return name in ENABLED
