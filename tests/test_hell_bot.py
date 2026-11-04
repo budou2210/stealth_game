@@ -177,3 +177,15 @@ def test_rewind_keeps_only_the_successful_branch():
     for keys in bot.log:
         fresh.step(keys)
     assert snapshot_of(fresh) == snapshot_of(bot.sim)
+
+
+def test_heads_for_exit_when_all_items_were_taken_without_a_race():
+    """競走を経ずに8個とも集めてしまっても止まらず、出口へ向かう入力を返す。"""
+    from hell_bot.danger import DangerMap
+    from hell_bot.planner import Bot
+    from hell_bot.sim import Sim
+
+    bot = Bot(Sim(8), DangerMap())
+    bot.sim.items_collected = set(range(len(bot.sim.item_cells)))
+    keys = bot.decide()
+    assert keys or bot.race_keys, "出口へ向かう入力がある"

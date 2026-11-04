@@ -10,12 +10,15 @@
 - danger.json: 危険度の地図（次回の実行はここから続ける）
 - wins/seed_<種>.json: クリアできた回の入力の記録（replay.py で本物のゲーム画面で再生できる）
 - runs/seed_<種>.json: クリアできなかった回の入力の記録（どこで失敗したかを見る用）
+- errors.log: 挑戦の途中でエラーが起きたときの内容（その挑戦だけ飛ばして、ほかは続ける）
 """
 
 import argparse
 import json
 import random
+import traceback
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 
 from stealth_game.world import World
@@ -73,7 +76,7 @@ def main():
 
     started = finished = 0
     with ProcessPoolExecutor(max_workers=max(1, args.workers)) as pool:
-        running = set()
+        running = {}  # {挑戦: 種}
         while started < args.attempts or running:
             # 空いている分だけ新しい挑戦を始める（終わった挑戦の結果で更新した危険度の地図を使う）
             while started < args.attempts and len(running) < args.workers:
@@ -82,13 +85,24 @@ def main():
                     print("試していない種がなくなりました")
                     args.attempts = started
                     break
-                running.add(pool.submit(attempt, seed, danger_map, args.max_minutes * 60))
+                running[pool.submit(attempt, seed, danger_map, args.max_minutes * 60)] = seed
                 started += 1
             if not running:
                 break
-            done, running = wait(running, return_when=FIRST_COMPLETED)
+            done, _ = wait(running, return_when=FIRST_COMPLETED)
             for future in done:
-                result, visited, keys = future.result()
+                seed = running.pop(future)
+                try:
+                    result, visited, keys = future.result()
+                except BrokenProcessPool:
+                    print("挑戦を動かす仕組みが止まってしまいました（メモリ不足などの可能性があります）。ここで終わります", flush=True)
+                    return
+                except Exception:  # noqa: BLE001
+                    finished += 1
+                    with (results / "errors.log").open("a", encoding="utf-8") as f:
+                        f.write(f"種 {seed}\n{traceback.format_exc()}\n")
+                    print(f"[{finished}/{args.attempts}] 種 {seed}: エラー（内容は errors.log。ほかの挑戦は続けます）", flush=True)
+                    continue
                 save_result(results, result, visited, keys, danger_map, danger_path, attempts_path)
                 finished += 1
                 print(

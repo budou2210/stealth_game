@@ -381,8 +381,10 @@ class Bot:
     # --- 1回の判断 ------------------------------------------------------
     def decide(self):
         """次に押す入力の列を返す。競走に勝てる入力が見つかったら None（race_keys に入れる）。"""
-        self.check_progress()
         remaining = self.remaining()
+        if not remaining:
+            return self.escape_keys()
+        self.check_progress()
         target_index = remaining[0]
         target_cell = self.sim.item_cells[target_index]
         field = self.field(target_cell)
@@ -410,6 +412,25 @@ class Bot:
         if last:
             return self.beam_keys(self.search(field, avoid_item=target_index, staging=True), field)
         return self.beam_keys(self.search(field), field)
+
+    def escape_keys(self):
+        """競走を経ずに8個とも集めてしまったとき（予備の探索方法でたまたま拾ったなど）：出口へ走る。
+
+        出口まで逃げ切れるなら、その入力をそのまま実行する。逃げ切れなくても出口へ走り、捕まったら巻き戻しに任せる。
+        """
+        exit_field = self.field(EXIT_CELL)
+        s = self.sim.snapshot()
+        keys_log = []
+        for _ in range(RACE_LIMIT_FRAMES):
+            keys = keys_for(exit_field.direction(s.player.x, s.player.y), sneak=False)
+            s.step(keys)
+            keys_log.append(keys)
+            if s.done:
+                break
+        if s.state == "win":
+            self.race_keys = keys_log
+            return None
+        return keys_log[:SEGMENT_FRAMES]
 
     def check_progress(self):
         """目標のアイテムに長く近づけていなければ、別のアイテムを先にする。"""
