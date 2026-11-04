@@ -12,6 +12,7 @@
 """
 
 import math
+from collections import OrderedDict
 
 from stealth_game.constants import NEAR_SENSE_RADIUS, SOUND_WALL_MUFFLE
 from stealth_game.grid import world_to_cell
@@ -43,54 +44,107 @@ def predict_guards(sim, slots=HORIZON_SLOTS):
     return samples
 
 
-def cells_around(gx, gy, radius):
+# 計算を速くするための覚え書き。どれも「同じ入力なら同じ結果」になるものだけを覚えるので、結果は変わらない。
+# - 警備員のいるマスの周りの床の一覧（壁は動かないので、一度作れば使い回せる）
+# - 警備員1人ぶんの「見えるマス」「足音が聞こえるマス」（位置と向きが同じなら同じ）。
+#   判断は1秒ごとに12秒先まで予定表を作り直すので、前回と重なる11秒ぶんはここから取り出せる
+_FLOOR_NEAR = {}
+_SEEN_MEMO = OrderedDict()
+_HEARD_MEMO = OrderedDict()
+MEMO_LIMIT = 6000  # 覚えておく数の上限（多すぎるとメモリを使いすぎるので、古いものから捨てる）
+
+
+def floor_near(world, gx, gy, radius):
+    """(gx, gy) のマスを中心に、半径 radius の四角の範囲にある床のマス（壁を除く）。"""
     r = int(math.ceil(radius))
     gcx, gcy = world_to_cell(gx, gy)
-    for cy in range(gcy - r, gcy + r + 1):
-        for cx in range(gcx - r, gcx + r + 1):
-            yield cx, cy, math.hypot(cx + 0.5 - gx, cy + 0.5 - gy)
+    key = (gcx, gcy, r, world.doors_closed)
+    cells = _FLOOR_NEAR.get(key)
+    if cells is None:
+        cells = [
+            (cx, cy)
+            for cy in range(gcy - r, gcy + r + 1)
+            for cx in range(gcx - r, gcx + r + 1)
+            if not world.is_wall(cx, cy)
+        ]
+        _FLOOR_NEAR[key] = cells
+    return cells
 
 
-def visible_cells(world, guards, cfg, px, py):
-    """そのときの警備員の並びで、見つかるマス。(忍び足で見つかるマス, 走っていると見つかるマス)。"""
+def _remember(memo, key, value):
+    memo[key] = value
+    if len(memo) > MEMO_LIMIT:
+        memo.popitem(last=False)
+    return value
+
+
+def guard_seen(world, gx, gy, heading, cfg):
+    """警備員1人から見えるマス：(忍び足で見つかるマス, 走っていると見つかるマス)。"""
+    key = (gx, gy, heading, world.doors_closed)
+    hit = _SEEN_MEMO.get(key)
+    if hit is not None:
+        _SEEN_MEMO.move_to_end(key)
+        return hit
     sneak_view = cfg.view_range * cfg.sneak_view_rate + VIEW_MARGIN
     run_view = cfg.view_range + VIEW_MARGIN
     half = cfg.view_half_angle + ANGLE_MARGIN
     near = NEAR_SENSE_RADIUS + NEAR_MARGIN
+    sneak_seen, run_seen = [], []
+    for cell in floor_near(world, gx, gy, run_view):
+        tx, ty = cell[0] + 0.5, cell[1] + 0.5
+        dist = math.hypot(tx - gx, ty - gy)
+        if dist > run_view:
+            continue
+        if dist > near:
+            diff = (math.atan2(ty - gy, tx - gx) - heading + math.pi) % (2 * math.pi) - math.pi
+            if abs(diff) > half:
+                continue
+        if world.has_line_of_sight(gx, gy, tx, ty):
+            run_seen.append(cell)
+            if dist <= sneak_view:
+                sneak_seen.append(cell)
+    return _remember(_SEEN_MEMO, key, (frozenset(sneak_seen), frozenset(run_seen)))
+
+
+def guard_heard(world, gx, gy, cfg):
+    """警備員1人に、走ると足音を聞かれるマス（壁越しは届く距離が縮む）。"""
+    key = (gx, gy, world.doors_closed)
+    hit = _HEARD_MEMO.get(key)
+    if hit is not None:
+        _HEARD_MEMO.move_to_end(key)
+        return hit
+    radius = cfg.hear_radius + HEAR_MARGIN
+    through_wall = cfg.hear_radius * SOUND_WALL_MUFFLE + HEAR_MARGIN
+    heard = []
+    for cell in floor_near(world, gx, gy, radius):
+        tx, ty = cell[0] + 0.5, cell[1] + 0.5
+        dist = math.hypot(tx - gx, ty - gy)
+        if dist > radius:
+            continue
+        if dist <= through_wall or world.has_line_of_sight(gx, gy, tx, ty):
+            heard.append(cell)
+    return _remember(_HEARD_MEMO, key, frozenset(heard))
+
+
+def visible_cells(world, guards, cfg, px, py):
+    """そのときの警備員の並びで、見つかるマス。(忍び足で見つかるマス, 走っていると見つかるマス)。"""
     sneak_seen, run_seen = set(), set()
     for gx, gy, heading in guards:
         if math.hypot(gx - px, gy - py) > RELEVANT_DISTANCE:
             continue
-        for cx, cy, dist in cells_around(gx, gy, run_view):
-            if dist > run_view or (cx, cy) in sneak_seen or world.is_wall(cx, cy):
-                continue
-            if (cx, cy) in run_seen and dist > sneak_view:
-                continue
-            if dist > near:
-                angle = math.atan2(cy + 0.5 - gy, cx + 0.5 - gx)
-                diff = (angle - heading + math.pi) % (2 * math.pi) - math.pi
-                if abs(diff) > half:
-                    continue
-            if world.has_line_of_sight(gx, gy, cx + 0.5, cy + 0.5):
-                run_seen.add((cx, cy))
-                if dist <= sneak_view:
-                    sneak_seen.add((cx, cy))
+        sneak, run = guard_seen(world, gx, gy, heading, cfg)
+        sneak_seen |= sneak
+        run_seen |= run
     return sneak_seen, run_seen
 
 
 def audible_cells(world, guards, cfg, px, py):
     """走ると足音を聞かれるマス（壁越しは届く距離が縮む）。"""
-    radius = cfg.hear_radius + HEAR_MARGIN
-    through_wall = cfg.hear_radius * SOUND_WALL_MUFFLE + HEAR_MARGIN
     heard = set()
     for gx, gy, _ in guards:
         if math.hypot(gx - px, gy - py) > RELEVANT_DISTANCE:
             continue
-        for cx, cy, dist in cells_around(gx, gy, radius):
-            if dist > radius or (cx, cy) in heard or world.is_wall(cx, cy):
-                continue
-            if dist <= through_wall or world.has_line_of_sight(gx, gy, cx + 0.5, cy + 0.5):
-                heard.add((cx, cy))
+        heard |= guard_heard(world, gx, gy, cfg)
     return heard
 
 
