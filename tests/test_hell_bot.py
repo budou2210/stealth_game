@@ -75,3 +75,77 @@ def test_snapshot_replays_the_same_future():
 
     random.random()  # ほかの場所で乱数を使っても影響しない
     assert future(saved) == future(saved) == future(sim)
+
+
+# --- 記録の再生（replay.py） ------------------------------------------------
+
+def make_record(seed, frames):
+    from hell_bot.planner import encode_keys
+
+    return {"seed": seed, "keys": encode_keys([frozenset(scripted_keys(f)) for f in range(frames)])}
+
+
+def new_replay(game_class, record):
+    from hell_bot.replay import Replay
+
+    replay = Replay(record, 1.0)
+    replay.mouseWatcherNode.isButtonDown.return_value = False  # 本物のキーボードは何も押していない
+    return replay
+
+
+def snapshot_of(game):
+    return (round(game.player.x, 6), round(game.player.y, 6), game.state, guard_trace(game.guards))
+
+
+def test_replay_win_is_not_saved_as_best_time(game_class, records_dir):
+    from stealth_game.records import load_records, records_path
+
+    replay = new_replay(game_class, make_record(8, 30))
+    replay.elapsed = 123.0
+    replay.message_text.setText.reset_mock()
+    replay.on_win()
+    assert replay.state == "win"
+    assert replay.best_times == {}
+    assert load_records(records_path()) == {}, "ボットの記録はベストタイムに残さない"
+    message = replay.message_text.setText.call_args.args[0]
+    assert "M:" not in message
+
+
+def test_replay_restart_starts_over_from_first_frame(game_class):
+    replay = new_replay(game_class, make_record(8, 200))
+    items = list(replay.item_cells)
+    for _ in range(150):
+        replay.advance()
+    first_pass = snapshot_of(replay)
+    replay.restart_game()  # R
+    assert replay.frame == 0 and replay.state == "play"
+    assert replay.item_cells == items, "同じ配置で始め直す"
+    for _ in range(150):
+        replay.advance()
+    assert snapshot_of(replay) == first_pass, "やり直しても記録どおりに動く"
+
+
+def test_replay_ignores_m(game_class):
+    replay = new_replay(game_class, make_record(8, 30))
+    replay.ignore.assert_any_call("m")
+    assert "M:" not in replay.controls_line()
+
+
+def test_replay_pause_keeps_record_in_sync(game_class):
+    straight = new_replay(game_class, make_record(8, 200))
+    for _ in range(160):
+        straight.advance()
+
+    paused = new_replay(game_class, make_record(8, 200))
+    for _ in range(80):
+        paused.advance()
+    paused.toggle_pause()  # P
+    assert "M:" not in paused.message_text.setText.call_args.args[0]
+    frame = paused.frame
+    for _ in range(40):
+        paused.advance()
+    assert paused.frame == frame, "一時停止中は記録の入力も止まる"
+    paused.toggle_pause()
+    for _ in range(80):
+        paused.advance()
+    assert snapshot_of(paused) == snapshot_of(straight)
