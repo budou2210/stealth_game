@@ -31,6 +31,11 @@ class Difficulty:
     decoy_radius: float  # 音の罠が届く距離。0なら音の罠なし
     cloak: bool  # 透明化アイテムを出すか
     flash: bool  # スタン（アイテム）を出すか
+    # 理論値だけの仕掛け（devices.py）。ほかの難易度は初期値（なし）のまま
+    sentries: bool = False  # 見張り番（動かずに向きだけ変える鬼）を区画ごとに1人置くか
+    cameras: bool = False  # 監視カメラを区画ごとに1台付けるか
+    timed_doors: bool = False  # 境目の真ん中の扉を、時間で開け閉めするか
+    noisy_floors: int = 0  # 鳴る床の数。0ならなし
 
 
 # 難易度の詳細（メニューには雰囲気だけの説明を出し、中身はここに書く）
@@ -47,6 +52,11 @@ class Difficulty:
 #   地獄   : 全力。視界10・視野角80°・警戒1.6倍・足音6.5・追跡4.4・応援16（人数無制限）・挟み撃ち。
 #            「！」と同時に追跡。紫の鬼は30%の確率で注目地点を狙い、全アイテム回収後は
 #            決して見失わない。お助けアイテムなし、ライフなし。
+#
+#   理論値 : 地獄の見つかりやすさをさらに上げ（視界・視野角・忍び足の倍率・警戒・足音・注目地点）、
+#            仕掛け（見張り番・監視カメラ・時間で開け閉めする扉・鳴る床）を加えたもの。
+#            ボットがぎりぎりクリアできるように調整する（「理論上はクリアできる」難易度）。
+#            見つかった後の強さ（追跡・応援・挟み撃ち）は地獄と同じ。
 #
 #   共通：鬼の速度（追跡・捜索）は、難易度ごとに定義の中で直接指定する（他の難易度から引き継がない）。
 #         追跡速度は、地獄4.4、難しい・激ムズ3.96、普通・簡単3.1。巡回速度は全難易度共通（GUARD_PATROL_SPEED）。
@@ -155,5 +165,21 @@ EASY = replace(
     lives=3,
 )
 
-DIFFICULTIES = [EASY, NORMAL, HARD, VERY_HARD, HELL]
+# 理論値：地獄の見つかりやすさをさらに上げ、仕掛けを加えたもの
+THEORY = replace(
+    HELL,
+    key="theory",
+    view_range=10.5,
+    view_half_angle=math.radians(42.5),
+    sneak_view_rate=0.85,
+    hear_radius=7.0,
+    alert_gain=1.8,
+    focus_rate=0.4,
+    sentries=True,
+    cameras=True,
+    timed_doors=True,
+    noisy_floors=6,
+)
+
+DIFFICULTIES = [EASY, NORMAL, HARD, VERY_HARD, HELL, THEORY]
 DEFAULT_DIFFICULTY_INDEX = 1  # メニューで最初に選ばれている難易度（普通）

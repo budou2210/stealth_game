@@ -50,3 +50,17 @@ STUN_TIME_SEEN = 10.0  # スタン：プレイヤーを視界に入れていた�
 STUN_TIME_NEAR = 5.0  # スタン：見ていなくても周囲にいた鬼が動けない秒数
 FLASH_RADIUS = 12.0  # スタンの「周囲」の範囲（音の罠の16より少し狭い。壁越しにも届く）
 STUN_SPIN_RATE = math.radians(240)  # 目がくらんでいる間、その場で回る速さ（見た目）
+
+# --- 地獄より上の難易度（理論値）の仕掛け。置き場所は devices.py ---
+SENTRY_DWELL = 2.5  # 見張り番：1つの向きを見ている秒数（その後、次の向きへ回る）
+CAMERA_VIEW_RANGE = 9.0  # 監視カメラの視界の長さ（忍び足なら難易度の忍び足の倍率がかかる）
+CAMERA_HALF_ANGLE = math.radians(22)  # 監視カメラの視界の半角
+CAMERA_SWEEP = math.radians(40)  # 監視カメラが首を振る幅（中心から片側）
+CAMERA_PERIOD = 8.0  # 監視カメラが首を1往復させる秒数
+CAMERA_CALL_RADIUS = 16.0  # 監視カメラに映ると、この距離内の鬼が映った場所を調べに来る（壁越しにも届く）
+CAMERA_ALARM_COOLDOWN = 3.0  # 一度鳴ったカメラが、次に鳴れるまでの秒数
+DOOR_PERIOD = 10.0  # 時間で開け閉めする扉の1周期の秒数
+DOOR_OPEN_RATE = 0.5  # 1周期のうち開いている割合（前半が開き、後半が閉まる）
+FLOOR_RUN_RADIUS = 16.0  # 鳴る床：走って乗ったときに音が届く距離（音の罠と同じ。壁越しにも届く）
+FLOOR_SNEAK_RADIUS = 6.0  # 鳴る床：忍び足で乗ったときに音が届く距離
+FLOOR_COOLDOWN = 3.0  # 鳴る床：一度鳴った床が、次に鳴れるまでの秒数

@@ -24,6 +24,7 @@ EXPECTED = {
     "hard": (5, "f1d190c9e1a9e206"),
     "very_hard": (5, "ac6b49aecc9010b3"),
     "hell": (2, "555f4332c6abb6b3"),
+    "theory": (1, "cdedb25ebc3e7764"),
 }
 
 
@@ -57,8 +58,13 @@ def snapshot(game):
         (round(g.x, 6), round(g.y, 6), g.state, round(g.alert, 6), round(g.stun_timer, 6), tuple(g.path))
         for g in game.guards
     )
-    return (game.state, round(p.x, 6), round(p.y, 6), game.lives, tuple(sorted(game.items_collected)),
+    snap = (game.state, round(p.x, 6), round(p.y, 6), game.lives, tuple(sorted(game.items_collected)),
             tuple(game.item_cells), tuple(sorted(game.held.items())), round(game.cloak_timer, 6), guards)
+    if game.timed_doors or game.cameras or game.noisy_floors:  # 理論値の仕掛け（ほかの難易度の指紋は変えない）
+        devices = (tuple(sorted(game.world.timed_closed)), game.camera_alarms,
+                   tuple(round(c, 6) for c in game.floor_cooldowns), tuple(tuple(sorted(f)) for f in game.noisy_floors))
+        snap = snap[:-1] + (devices, guards)
+    return snap
 
 
 def run(game_class, cfg, seed, frames=FRAMES):

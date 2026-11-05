@@ -16,6 +16,8 @@ from panda3d.core import (
 )
 
 from ..constants import (
+    CAMERA_HALF_ANGLE,
+    CAMERA_VIEW_RANGE,
     CLOAK_WARN_TIME,
     DECOY_FUSE,
     DECOY_RING_TIME,
@@ -33,6 +35,9 @@ from ..guard import Guard
 from ..layout import EXIT_CELL, QUADRANTS
 from ..render.meshes import make_disc, make_floor_fan_geom, make_stripe_texture
 from ..theme import (
+    CAMERA_ALARM_COLOR,
+    CAMERA_BODY_COLOR,
+    CAMERA_CONE_COLOR,
     CLOAK_PICKUP_COLOR,
     CONE_COLORS,
     CONE_RAYS,
@@ -44,6 +49,7 @@ from ..theme import (
     EXCLAIM_FOLLOW_ALPHA,
     EXCLAIM_FRAME_COLOR,
     FLASH_PICKUP_COLOR,
+    FLOOR_TILE_COLOR,
     NOISE_BIN,
     NOISE_BIN_SORT,
     NOISE_INNER_COLOR,
@@ -51,8 +57,11 @@ from ..theme import (
     NOISE_STRIPE_COLORS,
     NOISE_STRIPE_PERIOD,
     SAFE_DOOR_COLOR,
+    SENTRY_COLOR,
     STATE_COLORS,
     STUN_COLOR,
+    TIMED_DOOR_COLOR,
+    TIMED_DOOR_OPEN_COLOR,
     WALL_HEIGHT,
     WANDERER_PATROL_COLOR,
 )
@@ -167,21 +176,24 @@ class VisualsMixin:
         return pivot
 
     def update_cone(self, guard, view):
-        node = view["cone"]
-        node.removeAllGeoms()
-        r, g, b = CONE_COLORS[guard.state]
         cfg = guard.cfg
+        self.draw_view_fan(view["cone"], guard.x, guard.y, guard.heading, cfg.view_half_angle, cfg.view_range,
+                           CONE_COLORS[guard.state])
+
+    def draw_view_fan(self, node, x, y, heading, half_angle, view_range, rgb):
+        """視界の扇形（壁で切れる）を描き直す。鬼と監視カメラで使う。"""
+        node.removeAllGeoms()
+        r, g, b = rgb
         vdata = GeomVertexData("cone", GeomVertexFormat.getV3c4(), Geom.UHDynamic)
         vdata.setNumRows(CONE_RAYS + 2)
         vertex = GeomVertexWriter(vdata, "vertex")
         color = GeomVertexWriter(vdata, "color")
-        vertex.addData3(guard.x, guard.y, 0.05)
+        vertex.addData3(x, y, 0.05)
         color.addData4(r, g, b, 0.45)
         for i in range(CONE_RAYS + 1):
-            spread = 2 * cfg.view_half_angle * i / CONE_RAYS
-            angle = guard.heading - cfg.view_half_angle + spread
-            dist = self.world.cast_ray(guard.x, guard.y, angle, cfg.view_range)
-            vertex.addData3(guard.x + math.cos(angle) * dist, guard.y + math.sin(angle) * dist, 0.05)
+            angle = heading - half_angle + 2 * half_angle * i / CONE_RAYS
+            dist = self.world.cast_ray(x, y, angle, view_range)
+            vertex.addData3(x + math.cos(angle) * dist, y + math.sin(angle) * dist, 0.05)
             color.addData4(r, g, b, 0.10)
         fan = GeomTrifans(Geom.UHDynamic)
         fan.addConsecutiveVertices(0, CONE_RAYS + 2)
@@ -195,6 +207,8 @@ class VisualsMixin:
             return STUN_COLOR
         if guard.is_wanderer() and guard.state == Guard.PATROL:
             return WANDERER_PATROL_COLOR
+        if guard.is_sentry() and guard.state == Guard.PATROL:
+            return SENTRY_COLOR
         return STATE_COLORS[guard.state]
 
     def update_guard_view(self, guard, view):
@@ -280,7 +294,58 @@ class VisualsMixin:
             view["cone"].removeAllGeoms()
         self.update_decoy_views(dt)
         self.update_item_views(dt)
+        self.update_device_views()
         self.update_noise_view()
+
+    # --- 理論値の仕掛け ---------------------------------------------------------
+    def build_device_views(self):
+        """仕掛けの見た目を作り直す（ゲームを始めるたびに。仕掛けのない難易度では何も作らない）。"""
+        for node in self.device_nps:
+            node.removeNode()
+        self.device_nps = []
+        self.floor_tile_nps = []
+        for cells in self.noisy_floors:
+            for x, y in cells:
+                tile = self.add_box(self.render, (x + 0.06, y + 0.06, 0), (0.88, 0.88, 0.03), FLOOR_TILE_COLOR)
+                tile.setTransparency(TransparencyAttrib.MAlpha)
+                tile.setLightOff()
+                self.device_nps.append(tile)
+        self.timed_door_views = []
+        for door in self.timed_doors:
+            walls = [self.add_box(self.render, (x, y, 0), (1, 1, WALL_HEIGHT), TIMED_DOOR_COLOR) for x, y in door.cells]
+            marks = []
+            for x, y in door.cells:
+                mark = self.add_box(self.render, (x + 0.1, y + 0.1, 0), (0.8, 0.8, 0.02), TIMED_DOOR_OPEN_COLOR)
+                mark.setTransparency(TransparencyAttrib.MAlpha)
+                mark.setLightOff()
+                marks.append(mark)
+            self.timed_door_views.append((walls, marks))
+            self.device_nps += walls + marks
+        self.camera_views = []
+        for camera in self.cameras:
+            body = self.add_box(self.render, (camera.x - 0.2, camera.y - 0.2, 1.1), (0.4, 0.4, 0.3), CAMERA_BODY_COLOR)
+            cone = GeomNode("camera_cone")
+            cone_np = self.render.attachNewNode(cone)
+            cone_np.setLightOff()
+            cone_np.setTwoSided(True)
+            cone_np.setTransparency(TransparencyAttrib.MAlpha)
+            cone_np.setDepthWrite(False)
+            self.camera_views.append((body, cone))
+            self.device_nps += [body, cone_np]
+
+    def update_device_views(self):
+        for door, (walls, marks) in zip(self.timed_doors, self.timed_door_views):
+            for node in walls:
+                node.show() if door.closed else node.hide()
+            for node in marks:
+                node.hide() if door.closed else node.show()
+        for i, (camera, (body, cone)) in enumerate(zip(self.cameras, self.camera_views)):
+            alarm = self.camera_alarm_timers[i] > 0 and int(self.camera_alarm_timers[i] * 6) % 2 == 0
+            rgb = CAMERA_ALARM_COLOR if alarm else CAMERA_CONE_COLOR
+            body.setColor(*(rgb + (1,) if alarm else CAMERA_BODY_COLOR))
+            view_range = CAMERA_VIEW_RANGE
+            self.draw_view_fan(cone, camera.x, camera.y, camera.heading_at(self.elapsed), CAMERA_HALF_ANGLE,
+                               view_range, rgb)
 
     def noise_range_visible(self):
         """足音の範囲を出すか：設定がオンで、プレイ中に安全地帯の外を走っているときだけ。"""
