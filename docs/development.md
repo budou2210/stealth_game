@@ -83,3 +83,11 @@ src/stealth_game/
 ```
 
 Panda3Dに依存するのは `render/` と `app/` だけ。ほかのモジュール（ロジック）はPanda3Dなしで読み込める。
+
+## 地獄攻略ボット（tools/hell_bot/）
+
+地獄をクリアできることを確かめ、クリアの様子を見るための自動プレイ。使い方とコマンドの一覧は [tools/hell_bot/README.md](../tools/hell_bot/README.md)。
+
+- 画面なしのシミュレーター（`sim.py`）は `StealthGame` の処理を借りて動く。ゲーム本体の処理を変えたら `tests/test_hell_bot.py`（シミュレーターと本物の一致）も通ることを確かめる。
+- 記録は「乱数の種＋1コマずつの入力」なので、ゲームの動きが変わると古い記録は再生でずれる。
+- 結果（`tools/hell_bot/results/`）は .gitignore で外してある。

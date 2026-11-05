@@ -1,0 +1,191 @@
+"""地獄ボット（tools/hell_bot）のテスト。"""
+
+import random
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+
+from stealth_game.difficulty import HELL  # noqa: E402
+
+DT = 1 / 30
+
+
+def scripted_keys(frame):
+    """動きを決めた入力：忍び足で外へ出て、上と右に歩き、ときどき走る。"""
+    keys = set()
+    phase = (frame // 45) % 4
+    keys.add(("right", "up", "right", "down")[phase])
+    if frame < 90:
+        keys = {"right"}
+    if (frame // 60) % 3 != 2:
+        keys.add("sneak")
+    return keys
+
+
+def guard_trace(guards):
+    return [(round(g.x, 6), round(g.y, 6), round(g.heading, 6), g.state, round(g.alert, 6)) for g in guards]
+
+
+@pytest.mark.parametrize("seed", [3, 8, 21])
+def test_sim_matches_real_game(game_class, seed):
+    """同じ乱数の種・同じ入力なら、シミュレーターと本物のゲームで警備員の動きがフレームごとに一致する。"""
+    from hell_bot.sim import Sim
+
+    frames = 900
+    game = game_class()
+    game.keys = set()
+    game.is_down = lambda name: name in game.keys
+    game.open_menu()
+    random.seed(seed)
+    game.start_game(HELL)
+    real = []
+    for frame in range(frames):
+        game.keys = scripted_keys(frame)
+        game.update_play(DT)
+        real.append((round(game.player.x, 6), round(game.player.y, 6), game.state, guard_trace(game.guards)))
+        if game.state != "play":
+            break
+
+    assert len(real) > 200, "短すぎて比べたことにならない"
+    sim = Sim(seed)
+    assert sim.item_cells == game.item_cells
+    for frame, expected in enumerate(real):
+        sim.step(scripted_keys(frame))
+        got = (round(sim.player.x, 6), round(sim.player.y, 6), sim.state, guard_trace(sim.guards))
+        assert got == expected, f"{frame}コマ目で本物とずれた"
+
+
+def test_snapshot_replays_the_same_future():
+    """保存した状態から何度やり直しても、同じ入力なら同じ未来になる（乱数の状態も戻る）。"""
+    from hell_bot.sim import Sim
+
+    sim = Sim(5)
+    for frame in range(120):
+        sim.step(scripted_keys(frame))
+    saved = sim.snapshot()
+
+    def future(start):
+        s = start.snapshot()
+        for frame in range(120, 400):
+            s.step(scripted_keys(frame))
+        return s.player.x, s.player.y, s.state, guard_trace(s.guards)
+
+    random.random()  # ほかの場所で乱数を使っても影響しない
+    assert future(saved) == future(saved) == future(sim)
+
+
+# --- 記録の再生（replay.py） ------------------------------------------------
+
+def make_record(seed, frames):
+    from hell_bot.planner import encode_keys
+
+    return {"seed": seed, "keys": encode_keys([frozenset(scripted_keys(f)) for f in range(frames)])}
+
+
+def new_replay(game_class, record):
+    from hell_bot.replay import Replay
+
+    replay = Replay(record, 1.0)
+    replay.mouseWatcherNode.isButtonDown.return_value = False  # 本物のキーボードは何も押していない
+    return replay
+
+
+def snapshot_of(game):
+    return (round(game.player.x, 6), round(game.player.y, 6), game.state, guard_trace(game.guards))
+
+
+def test_replay_win_is_not_saved_as_best_time(game_class, records_dir):
+    from stealth_game.records import load_records, records_path
+
+    replay = new_replay(game_class, make_record(8, 30))
+    replay.elapsed = 123.0
+    replay.message_text.setText.reset_mock()
+    replay.on_win()
+    assert replay.state == "win"
+    assert replay.best_times == {}
+    assert load_records(records_path()) == {}, "ボットの記録はベストタイムに残さない"
+    message = replay.message_text.setText.call_args.args[0]
+    assert "M:" not in message
+
+
+def test_replay_restart_starts_over_from_first_frame(game_class):
+    replay = new_replay(game_class, make_record(8, 200))
+    items = list(replay.item_cells)
+    for _ in range(150):
+        replay.advance()
+    first_pass = snapshot_of(replay)
+    replay.restart_game()  # R
+    assert replay.frame == 0 and replay.state == "play"
+    assert replay.item_cells == items, "同じ配置で始め直す"
+    for _ in range(150):
+        replay.advance()
+    assert snapshot_of(replay) == first_pass, "やり直しても記録どおりに動く"
+
+
+def test_replay_ignores_m(game_class):
+    replay = new_replay(game_class, make_record(8, 30))
+    replay.ignore.assert_any_call("m")
+    assert "M:" not in replay.controls_line()
+
+
+def test_replay_pause_keeps_record_in_sync(game_class):
+    straight = new_replay(game_class, make_record(8, 200))
+    for _ in range(160):
+        straight.advance()
+
+    paused = new_replay(game_class, make_record(8, 200))
+    for _ in range(80):
+        paused.advance()
+    paused.toggle_pause()  # P
+    assert "M:" not in paused.message_text.setText.call_args.args[0]
+    frame = paused.frame
+    for _ in range(40):
+        paused.advance()
+    assert paused.frame == frame, "一時停止中は記録の入力も止まる"
+    paused.toggle_pause()
+    for _ in range(80):
+        paused.advance()
+    assert snapshot_of(paused) == snapshot_of(straight)
+
+
+def test_rewind_keeps_only_the_successful_branch():
+    """巻き戻した後の記録を最初から再生すると、ボットの今の状態とぴったり一致する（失敗した流れが混ざらない）。"""
+    from hell_bot.danger import DangerMap
+    from hell_bot.planner import Bot
+    from hell_bot.sim import Sim
+
+    bot = Bot(Sim(8), DangerMap())
+    bot.save_checkpoint()
+    for frame in range(150):
+        bot.apply(frozenset(scripted_keys(frame)))
+    bot.save_checkpoint()
+    checkpoint_time = bot.sim.elapsed
+    for frame in range(150, 400):  # この流れは捨てられる
+        bot.apply(frozenset({"right"}))
+    bot.sim.elapsed += 40  # 行き詰まったことにする（30秒より前の保存点へ戻る）
+    assert bot.rewind("stuck")
+    assert bot.sim.elapsed == checkpoint_time
+    assert len(bot.log) == 150
+    assert bot.hold_slots == 1, "やり直すときは少し待ってから動く"
+    for frame in range(150, 300):
+        bot.apply(frozenset(scripted_keys(frame)))
+
+    fresh = Sim(8)
+    for keys in bot.log:
+        fresh.step(keys)
+    assert snapshot_of(fresh) == snapshot_of(bot.sim)
+
+
+def test_heads_for_exit_when_all_items_were_taken_without_a_race():
+    """競走を経ずに8個とも集めてしまっても止まらず、出口へ向かう入力を返す。"""
+    from hell_bot.danger import DangerMap
+    from hell_bot.planner import Bot
+    from hell_bot.sim import Sim
+
+    bot = Bot(Sim(8), DangerMap())
+    bot.sim.items_collected = set(range(len(bot.sim.item_cells)))
+    keys = bot.decide()
+    assert keys or bot.race_keys, "出口へ向かう入力がある"
