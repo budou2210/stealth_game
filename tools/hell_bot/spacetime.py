@@ -167,9 +167,10 @@ def danger_schedule(sim, slots=HORIZON_SLOTS):
         for i in range(first, last + 1):
             sneak_unsafe |= seen[i][0]
             run_unsafe |= seen[i][1]
-        # 足音は区切りの最初と最後の並びで調べる（余裕を広めにとってある）
-        run_unsafe |= audible_cells(world, samples[first], cfg, px, py)
-        run_unsafe |= audible_cells(world, samples[last], cfg, px, py)
+        # 足音は区切りの最初と最後の並びで調べる（余裕を広めにとってある）。V（速度重視）のときは足音を気にしない
+        if not enabled("V"):
+            run_unsafe |= audible_cells(world, samples[first], cfg, px, py)
+            run_unsafe |= audible_cells(world, samples[last], cfg, px, py)
         schedule.append((sneak_unsafe, run_unsafe))
     return schedule
 
@@ -198,7 +199,7 @@ def plan_path(world, start, schedule, field, forbidden=frozenset(), floor_value=
     def value(cell):
         return max(field.dist.get(cell, math.inf), floor_value)
 
-    early = enabled("C")
+    early = enabled("C") or enabled("V")
     layer = {start: value(start)}
     reached = {start: 0}  # {マス: 経路の中で、一番近づいた距離に初めて届いた区切り}（C のとき使う）
     parents = []

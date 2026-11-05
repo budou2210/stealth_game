@@ -137,7 +137,9 @@ def threat(sim):
 
 
 def can_run(sim):
-    """足音を聞かれる距離に警備員がいなければ走ってよい。"""
+    """足音を聞かれる距離に警備員がいなければ走ってよい（V＝速度重視のときは、いつでも走ってよい）。"""
+    if enabled("V"):
+        return True
     p = sim.player
     limit = sim.difficulty.hear_radius + RUN_CLEARANCE
     return all(g.distance_to(p.x, p.y) > limit for g in sim.guards)
@@ -445,7 +447,7 @@ class Bot:
                 if any(i in s.items_collected for i in avoid):
                     return None
                 here = world_to_cell(s.player.x, s.player.y)
-                for g in s.guards:
+                for g in ([] if enabled("V") else s.guards):  # V（速度重視）のときは、足音を聞かれてもよい
                     if (g.state == Guard.SEARCH and g.last_known is not None
                             and g.last_known != known.get(g.spawn) and manhattan(g.last_known, here) <= 4):
                         return None  # 足音を聞かれた
