@@ -39,12 +39,14 @@ from .helpers import HelperMixin
 from .hud import HudMixin
 from .input import InputMixin
 from .menu import MenuMixin
+from .replay import ReplayMixin
 from .title import TitleMixin
 from .visuals import VisualsMixin
 
 
 class StealthGame(
-    InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, TitleMixin, HelperMixin, AudioMixin, ShowBase
+    InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, TitleMixin, HelperMixin, AudioMixin, ReplayMixin,
+    ShowBase,
 ):
     def __init__(self):
         loadPrcFileData("", "window-title SNEAKUBE\nwin-size 1100 800")
@@ -92,6 +94,8 @@ class StealthGame(
         self.setup_hud()
         self.setup_audio()
         self.setup_title()
+        self.setup_replay()
+        self.last_step_played = False  # 直前の step でゲームが進んだか（プレイ中・捕まって止まっている間）
         self.overview_cache = {}
         self.snap_camera()
 
@@ -131,8 +135,10 @@ class StealthGame(
         self.level_np = build_level_node(self.world)
         self.level_np.reparentTo(self.render)
 
-    def start_game(self, cfg):
+    def start_game(self, cfg, random_state=None):
+        """ゲームを始める。random_state: リプレイの再生のとき、記録した乱数の状態（すでに設定済み）。"""
         self.difficulty = cfg
+        self.begin_recording(random_state if random_state is not None else random.getstate())
         self.guards = self.make_guards(cfg)
         self.menu_title.hide()
         self.menu_text.hide()
@@ -142,7 +148,11 @@ class StealthGame(
         self.reset_game()
 
     def restart_game(self):
-        if self.state not in ("menu", "title"):
+        if self.state in ("menu", "title"):
+            return
+        if self.replay is not None:
+            self.start_replay()  # 再生中の R：最初から再生し直す
+        else:
             self.start_game(self.difficulty)
 
     def reset_game(self):
@@ -231,6 +241,9 @@ class StealthGame(
 
     def show_game_over(self):
         """「捕まった...」の後、ジングルと同時に「ゲームオーバー」に切り替える。"""
+        if self.replay is not None:
+            self.end_replay_mismatch()  # ベスト記録の再生でゲームオーバーになるのは、動きが合わなくなったとき
+            return
         self.play_sound("lose")
         self.message_text.setText(self.text["game_over"])
 
@@ -350,12 +363,16 @@ class StealthGame(
 
     def on_win(self):
         """クリア。その難易度のベストタイムより速ければ記録を書き換えて保存する。"""
+        if self.replay is not None:
+            self.on_replay_win()
+            return
         self.state = "win"
         key = self.difficulty.key
         self.stop_bgm()
         self.play_sound("clear")
         if update_best(self.best_times, key, self.elapsed):
             save_records(self.records_file, self.best_times)
+            self.save_best_replay()
             # クリアのジングルの間は「ミッション成功！」、新記録のジングルと同時に「新記録！」に切り替える
             self.message_text.setText(self.text["win"].format(time=self.elapsed))
             self.run_later(NEW_RECORD_DELAY, self.show_new_record)
@@ -370,14 +387,17 @@ class StealthGame(
         """P：プレイ中なら一時停止、一時停止中なら再開する。"""
         if self.state == "play":
             self.state = "paused"
-            self.message_text.setText(self.text["paused"])
+            self.message_text.setText(self.text["replay_paused" if self.replay is not None else "paused"])
         elif self.state == "paused":
             self.state = "play"
             self.message_text.setText("")
 
     def step(self, dt):
         """1フレーム分の処理。一時停止中は時間・警備員・アイテムの回転などを全部止める。"""
-        self.poll_action_keys()
+        presses = self.poll_action_keys()
+        self.last_step_played = self.state in ("play", "caught")
+        if self.last_step_played:
+            self.record_frame(dt, presses)  # リプレイ用に、このコマの時間の長さと入力を残す
         if self.state == "title":
             self.update_title(dt)
         elif self.state == "play":
@@ -391,5 +411,9 @@ class StealthGame(
         self.update_hud()
 
     def update(self, task):
-        self.step(min(ClockObject.getGlobalClock().getDt(), 0.05))
+        dt = min(ClockObject.getGlobalClock().getDt(), 0.05)
+        if self.replay is not None:
+            self.replay_tick(dt)  # ベスト記録の再生中は、記録した時間の長さで進める
+        else:
+            self.step(dt)
         return task.cont

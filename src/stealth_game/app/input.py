@@ -26,6 +26,7 @@ class InputMixin:
         self.accept("escape", sys.exit)
         self.accept("r", self.restart_game)
         self.accept("m", self.open_menu)
+        self.accept("v", self.play_best_replay)
         self.accept("arrow_up", self.move_menu, [-1])
         self.accept("arrow_down", self.move_menu, [1])
         for i in range(len(DIFFICULTIES)):
@@ -57,9 +58,12 @@ class InputMixin:
         return down and not was_down
 
     def poll_action_keys(self):
-        """押した瞬間の操作。キーごとに毎回調べるので、他のキーと同時押しでも反応する。"""
+        """押した瞬間の操作。キーごとに毎回調べるので、他のキーと同時押しでも反応する。
+
+        プレイ中に使ったお助けアイテムのキーを返す（リプレイの記録用）。
+        """
         names = ("overview", "confirm", "decoy", "cloak", "flash", "noise_range", "pause")
-        presses = {name: self.pressed_now(name) for name in names}
+        presses = self.replay_presses({name: self.pressed_now(name) for name in names})
         if presses["noise_range"]:  # 設定の切り替えは、メニューでもプレイ中でもできる
             self.toggle_noise_range()
         if presses["pause"]:
@@ -67,13 +71,13 @@ class InputMixin:
         if self.state == "title":
             if presses["confirm"]:
                 self.leave_title()
-            return
+            return frozenset()
         if self.state == "menu":
             if presses["confirm"]:
                 self.choose_difficulty(None)
-            return
+            return frozenset()
         if self.state == "paused":  # 一時停止中は、再開・やり直し・難易度選択・設定・終了だけ受け付ける
-            return
+            return frozenset()
         if presses["overview"]:
             self.toggle_overview()
         if presses["decoy"]:
@@ -82,8 +86,12 @@ class InputMixin:
             self.use_cloak()
         if presses["flash"]:
             self.use_flash()
+        return frozenset(name for name in ("decoy", "cloak", "flash") if presses[name])
 
     def is_down(self, name):
+        replayed, down = self.replay_key_down(name)
+        if replayed:  # ベスト記録の再生中は、移動と忍び足のキーを記録のとおりに押す
+            return down
         watcher = self.mouseWatcherNode
         return any(watcher.isButtonDown(button) for button in self.key_groups[name])
 

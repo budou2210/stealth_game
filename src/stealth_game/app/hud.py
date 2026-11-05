@@ -126,6 +126,8 @@ class HudMixin:
 
     def controls_line(self):
         """操作説明。プレイ中はその難易度で使えるお助けアイテムだけ、メニューでは全種類を載せる。"""
+        if self.replay is not None:
+            return self.text["replay_controls"]
         kinds = list(HELPER_MAX_HELD) if self.state == "menu" else self.helper_kinds()
         parts = [self.text["controls_move"]]
         parts += [self.text[f"{kind}_controls"] for kind in kinds]

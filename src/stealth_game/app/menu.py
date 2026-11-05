@@ -25,17 +25,20 @@ class MenuMixin:
 
     def update_menu_text(self):
         setting = self.text["noise_range_setting"].format(state=self.setting_state(self.show_noise_range))
-        lines = [self.text["menu_prompt"], setting, ""]
+        lines = [self.text["menu_prompt"], setting, self.text["replay_prompt"], ""]
         for i, cfg in enumerate(DIFFICULTIES):
             marker = ">" if i == self.menu_index else " "
             best = self.best_times.get(cfg.key)
             best_label = self.text["best_label"].format(time=best) if best is not None else ""
+            if self.has_best_replay(cfg):
+                best_label += self.text["replay_mark"]
             lines.append(f"{marker} {i + 1}. {self.level_name(cfg)}{self.lives_label(cfg)}{best_label}")
             lines.append(self.text[f"{cfg.key}_desc"])
             lines.append("")
         self.menu_text.setText("\n".join(lines))
 
     def open_menu(self):
+        self.stop_replay()
         self.state = "menu"
         self.camera_mode = "overview"
         self.reset_audio()
