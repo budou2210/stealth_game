@@ -9,7 +9,7 @@
 - 記録を本物のゲーム画面で再生する
 - 速いクリアの記録の後半をやり直して、さらに縮める（これまでの最速は 60.5秒）
 
-コマンドはすべて、プロジェクトのフォルダで実行します（例は PowerShell）。
+コマンドはすべて、プロジェクトのフォルダで実行します。PowerShell でもコマンドプロンプトでも動きます（書き方が違うのは、下の「切り替えスイッチ」の設定だけです）。
 
 ## コマンド一覧
 
@@ -72,17 +72,15 @@ uv run python -m tools.hell_bot.replay tools/hell_bot/results/wins/seed_2214.jso
 
 ### 4. 切り替えスイッチ（BOT_OPTIONS）
 
-試験用の動き方です。コマンドの前に、別の行で設定します。
+試験用の動き方です。コマンドの前に、別の行で設定します。使っているウィンドウによって書き方が違います
+（行の頭が `PS C:\...>` なら PowerShell、`C:\...>` だけならコマンドプロンプトです）。
 
-```
-$env:BOT_OPTIONS="V"
-```
+| | 設定する（例：V） | 元に戻す |
+|---|---|---|
+| PowerShell | `$env:BOT_OPTIONS="V"` | `$env:BOT_OPTIONS=""` |
+| コマンドプロンプト | `set BOT_OPTIONS=V` | `set BOT_OPTIONS=` |
 
-設定はそのウィンドウを閉じるまで残ります。元に戻すときは次の行を打ちます。
-
-```
-$env:BOT_OPTIONS=""
-```
+設定はそのウィンドウを閉じるまで残ります。
 
 | 記号 | 内容 | 試験の結果 |
 |---|---|---|
@@ -93,7 +91,7 @@ $env:BOT_OPTIONS=""
 | D | アイテムを集める順番を、道のりが短くなるように組み替える | 変わらない |
 | S2 | 滑らかに動くとき、2区切り先まで近道する | 予定とずれやすい |
 
-複数使うときは `$env:BOT_OPTIONS="V,T"` のようにカンマで区切ります。
+複数使うときは `V,T` のようにカンマで区切ります（PowerShell なら `$env:BOT_OPTIONS="V,T"`、コマンドプロンプトなら `set BOT_OPTIONS=V,T`）。
 
 ## 目的ごとのおすすめ
 
@@ -127,6 +125,8 @@ uv run python -m tools.hell_bot.run --attempts 8 --variants 3
    $env:BOT_OPTIONS="V"
    uv run python -m tools.hell_bot.refine --seed 2214
    ```
+
+   コマンドプロンプトでは、1行目を `set BOT_OPTIONS=V` にします。
 
 ## 結果のファイル
 
