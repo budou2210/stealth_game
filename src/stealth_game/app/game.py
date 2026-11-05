@@ -69,7 +69,7 @@ class StealthGame(
         self.item_cells = []
         self.items_collected = set()
         self.collect_order = []
-        self.setup_devices()  # 理論値の仕掛け（ほかの難易度では空）
+        self.setup_devices()  # 超越の仕掛け（ほかの難易度では空）
         self.device_nps = []  # 仕掛けの見た目のノード（ゲームを始めるたびに作り直す）
         self.lives = NORMAL.lives
         self.caught_timer = 0.0
@@ -113,7 +113,7 @@ class StealthGame(
         spawns = build_wanderer_spawns() if cfg.wanderers else []
         guards = [Guard(self.world, cfg, route=route) for route in routes]
         guards += [Guard(self.world, cfg, spawn=spawn) for spawn in spawns]
-        if cfg.sentries:  # 理論値：見張り番（持ち場の1マスに立ち、向きだけを変える）
+        if cfg.sentries:  # 超越：見張り番（持ち場の1マスに立ち、向きだけを変える）
             guards += [Guard(self.world, cfg, route=[post], look=look) for post, look in build_sentry_posts()]
         if cfg.smart_wander:
             for guard in guards:

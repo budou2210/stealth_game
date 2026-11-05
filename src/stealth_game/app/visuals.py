@@ -16,6 +16,7 @@ from panda3d.core import (
 )
 
 from ..constants import (
+    DOOR_WARN_TIME,
     CAMERA_HALF_ANGLE,
     CAMERA_VIEW_RANGE,
     CLOAK_WARN_TIME,
@@ -49,7 +50,9 @@ from ..theme import (
     EXCLAIM_FOLLOW_ALPHA,
     EXCLAIM_FRAME_COLOR,
     FLASH_PICKUP_COLOR,
-    FLOOR_TILE_COLOR,
+    FLOOR_PULSE,
+    FLOOR_STRIPE_COLORS,
+    FLOOR_STRIPE_PERIOD,
     NOISE_BIN,
     NOISE_BIN_SORT,
     NOISE_INNER_COLOR,
@@ -61,7 +64,9 @@ from ..theme import (
     STATE_COLORS,
     STUN_COLOR,
     TIMED_DOOR_COLOR,
+    TIMED_DOOR_FRAME_COLOR,
     TIMED_DOOR_OPEN_COLOR,
+    TIMED_DOOR_WARN_COLOR,
     WALL_HEIGHT,
     WANDERER_PATROL_COLOR,
 )
@@ -297,29 +302,46 @@ class VisualsMixin:
         self.update_device_views()
         self.update_noise_view()
 
-    # --- 理論値の仕掛け ---------------------------------------------------------
+    # --- 超越の仕掛け ---------------------------------------------------------
     def build_device_views(self):
         """仕掛けの見た目を作り直す（ゲームを始めるたびに。仕掛けのない難易度では何も作らない）。"""
         for node in self.device_nps:
             node.removeNode()
         self.device_nps = []
         self.floor_tile_nps = []
+        if self.noisy_floors:
+            stripes = make_stripe_texture(FLOOR_STRIPE_COLORS)
         for cells in self.noisy_floors:
             for x, y in cells:
-                tile = self.add_box(self.render, (x + 0.06, y + 0.06, 0), (0.88, 0.88, 0.03), FLOOR_TILE_COLOR)
-                tile.setTransparency(TransparencyAttrib.MAlpha)
+                outline = [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1), (x, y)]
+                node = GeomNode("noisy_floor")
+                node.addGeom(make_floor_fan_geom((x + 0.5, y + 0.5), outline, 0.03, FLOOR_STRIPE_PERIOD))
+                tile = self.render.attachNewNode(node)
+                tile.setTexture(stripes)
                 tile.setLightOff()
+                tile.setTwoSided(True)
+                tile.setTransparency(TransparencyAttrib.MAlpha)
+                self.floor_tile_nps.append(tile)
                 self.device_nps.append(tile)
         self.timed_door_views = []
         for door in self.timed_doors:
             walls = [self.add_box(self.render, (x, y, 0), (1, 1, WALL_HEIGHT), TIMED_DOOR_COLOR) for x, y in door.cells]
-            marks = []
-            for x, y in door.cells:
-                mark = self.add_box(self.render, (x + 0.1, y + 0.1, 0), (0.8, 0.8, 0.02), TIMED_DOOR_OPEN_COLOR)
-                mark.setTransparency(TransparencyAttrib.MAlpha)
-                mark.setLightOff()
-                marks.append(mark)
-            self.timed_door_views.append((walls, marks))
+            # 開いているとき：扉の場所に明るい青を重ね、低い枠で囲む（床の色と見分けられるように）
+            x1, y1, x2, y2 = door.bounds()
+            fill = self.add_box(self.render, (x1, y1, 0), (x2 - x1, y2 - y1, 0.02), TIMED_DOOR_OPEN_COLOR)
+            fill.setTransparency(TransparencyAttrib.MAlpha)
+            fill.setLightOff()
+            t = 0.12  # 枠の太さ
+            frame = [
+                self.add_box(self.render, (x1, y1, 0), (x2 - x1, t, 0.08), TIMED_DOOR_FRAME_COLOR),
+                self.add_box(self.render, (x1, y2 - t, 0), (x2 - x1, t, 0.08), TIMED_DOOR_FRAME_COLOR),
+                self.add_box(self.render, (x1, y1, 0), (t, y2 - y1, 0.08), TIMED_DOOR_FRAME_COLOR),
+                self.add_box(self.render, (x2 - t, y1, 0), (t, y2 - y1, 0.08), TIMED_DOOR_FRAME_COLOR),
+            ]
+            for node in frame:
+                node.setLightOff()
+            marks = [fill] + frame
+            self.timed_door_views.append((walls, marks, frame))
             self.device_nps += walls + marks
         self.camera_views = []
         for camera in self.cameras:
@@ -334,11 +356,20 @@ class VisualsMixin:
             self.device_nps += [body, cone_np]
 
     def update_device_views(self):
-        for door, (walls, marks) in zip(self.timed_doors, self.timed_door_views):
+        if self.floor_tile_nps:  # 鳴る床はゆっくり点滅させて、目に留まるようにする
+            low, high, rate = FLOOR_PULSE
+            alpha = low + (high - low) * (0.5 + 0.5 * math.sin(self.elapsed * rate * 2 * math.pi))
+            for tile in self.floor_tile_nps:
+                tile.setAlphaScale(alpha)
+        for door, (walls, marks, frame) in zip(self.timed_doors, self.timed_door_views):
             for node in walls:
                 node.show() if door.closed else node.hide()
             for node in marks:
                 node.hide() if door.closed else node.show()
+            left = door.seconds_until_close(self.elapsed)
+            warn = not door.closed and left < DOOR_WARN_TIME and int(left * 6) % 2 == 0  # 閉まる直前は点滅
+            for node in frame:
+                node.setColor(*(TIMED_DOOR_WARN_COLOR if warn else TIMED_DOOR_FRAME_COLOR))
         for i, (camera, (body, cone)) in enumerate(zip(self.cameras, self.camera_views)):
             alarm = self.camera_alarm_timers[i] > 0 and int(self.camera_alarm_timers[i] * 6) % 2 == 0
             rgb = CAMERA_ALARM_COLOR if alarm else CAMERA_CONE_COLOR

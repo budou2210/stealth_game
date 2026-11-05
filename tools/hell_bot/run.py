@@ -60,7 +60,7 @@ def main():
     parser = argparse.ArgumentParser(description="地獄への挑戦をくり返す")
     parser.add_argument("--attempts", type=int, default=10, help="挑戦する回数")
     parser.add_argument("--level", choices=LEVELS, default="hell",
-                        help="遊ぶ難易度（theory＝理論値）。結果は難易度ごとに別のフォルダに残す")
+                        help="遊ぶ難易度（transcend＝超越）。結果は難易度ごとに別のフォルダに残す")
     parser.add_argument("--workers", type=int, default=8, help="同時に走らせる挑戦の数（最初は8。PCのコア数まで）")
     parser.add_argument("--seed", type=int, help="この種だけを試す（選び分けをしない）")
     parser.add_argument("--results", type=Path, default=None, help="結果を保存するフォルダ（省くと難易度ごとの標準の場所）")

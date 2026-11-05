@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--rounds", type=int, default=3, help="速くなったら、新しい記録からくり返す回数の上限")
     parser.add_argument("--variants", type=int, default=4, help="1つの時点から試す動きの数")
     parser.add_argument("--workers", type=int, default=8, help="同時に走らせる数")
-    parser.add_argument("--level", choices=LEVELS, default="hell", help="記録の難易度（theory＝理論値）")
+    parser.add_argument("--level", choices=LEVELS, default="hell", help="記録の難易度（transcend＝超越）")
     parser.add_argument("--results", type=Path, default=None, help="結果のフォルダ（省くと難易度ごとの標準の場所）")
     args = parser.parse_args()
     set_level(args.level)

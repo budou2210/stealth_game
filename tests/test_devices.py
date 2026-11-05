@@ -1,4 +1,4 @@
-"""理論値の仕掛け（見張り番・監視カメラ・時間で開け閉めする扉・鳴る床）のテスト。"""
+"""超越の仕掛け（見張り番・監視カメラ・時間で開け閉めする扉・鳴る床）のテスト。"""
 
 import math
 import random
@@ -22,7 +22,7 @@ from stealth_game.devices import (
     noisy_floor_candidates,
     pick_noisy_floors,
 )
-from stealth_game.difficulty import DIFFICULTIES, HELL, THEORY
+from stealth_game.difficulty import DIFFICULTIES, HELL, TRANSCEND
 from stealth_game.grid import cell_center
 from stealth_game.guard import Guard
 from stealth_game.layout import EXIT_CELL, PLAYER_START
@@ -31,7 +31,7 @@ from stealth_game.player import Player
 DT = 1 / 30
 
 
-def started_game(game_class, cfg=THEORY, seed=1):
+def started_game(game_class, cfg=TRANSCEND, seed=1):
     random.seed(seed)
     game = game_class()
     game.keys = set()
@@ -77,10 +77,10 @@ def test_noisy_floors_change_by_seed(world):
     assert first != second
 
 
-def test_only_theory_has_devices(game_class):
+def test_only_transcend_has_devices(game_class):
     for cfg in DIFFICULTIES:
         game = started_game(game_class, cfg)
-        has = cfg is THEORY
+        has = cfg is TRANSCEND
         assert bool(game.cameras) == has
         assert bool(game.timed_doors) == has
         assert bool(game.noisy_floors) == has
@@ -90,7 +90,7 @@ def test_only_theory_has_devices(game_class):
 # --- 見張り番 -------------------------------------------------------------
 def test_sentry_turns_in_place(world):
     post, look = build_sentry_posts()[0]
-    guard = Guard(world, THEORY, route=[post], look=look)
+    guard = Guard(world, TRANSCEND, route=[post], look=look)
     player = Player()
     player.reset(PLAYER_START)  # 安全地帯にいて、見つからない
     headings = []
@@ -113,13 +113,13 @@ def test_camera_sees_in_front_but_not_too_far(world):
     player = Player()
     player.safe = False
     player.x, player.y = cell_center(straight_ahead_cell(camera, 2.5))
-    assert camera.sees(world, player, THEORY, t)
+    assert camera.sees(world, player, TRANSCEND, t)
     player.sneaking = True  # 忍び足でも、この距離なら映る
-    assert camera.sees(world, player, THEORY, t)
+    assert camera.sees(world, player, TRANSCEND, t)
     angle = camera.center
-    for dist in (CAMERA_VIEW_RANGE * THEORY.sneak_view_rate + 0.1, CAMERA_VIEW_RANGE + 0.1):
+    for dist in (CAMERA_VIEW_RANGE * TRANSCEND.sneak_view_rate + 0.1, CAMERA_VIEW_RANGE + 0.1):
         player.x, player.y = camera.x + math.cos(angle) * dist, camera.y + math.sin(angle) * dist
-        assert not camera.sees(world, player, THEORY, t)  # 忍び足の距離・ふつうの距離の外
+        assert not camera.sees(world, player, TRANSCEND, t)  # 忍び足の距離・ふつうの距離の外
         player.sneaking = False
 
 
@@ -130,7 +130,7 @@ def test_camera_does_not_see_outside_its_angle(world):
     side = camera.center + math.radians(30)  # 視界（中心から22°）の少し外。部屋の中の床
     player.x, player.y = camera.x + math.cos(side) * 3, camera.y + math.sin(side) * 3
     assert not world.is_wall_at(player.x, player.y)
-    assert not camera.sees(world, player, THEORY, 0.0)
+    assert not camera.sees(world, player, TRANSCEND, 0.0)
 
 
 def test_camera_alarm_calls_nearby_guards(game_class):

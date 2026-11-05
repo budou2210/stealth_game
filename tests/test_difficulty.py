@@ -7,9 +7,9 @@ import math
 
 import pytest
 
-from stealth_game.difficulty import DIFFICULTIES, EASY, HARD, HELL, NORMAL, THEORY, VERY_HARD
+from stealth_game.difficulty import DIFFICULTIES, EASY, HARD, HELL, NORMAL, TRANSCEND, VERY_HARD
 
-# 仕様表の行: (項目, 簡単, 普通, 難しい, 激ムズ, 地獄, 理論値)
+# 仕様表の行: (項目, 簡単, 普通, 難しい, 激ムズ, 地獄, 超越)
 SPEC = [
     ("view_range", 8, 8, 9, 10, 10, 10.5),
     ("view_angle_deg", 70, 70, 75, 80, 80, 85),
@@ -34,7 +34,7 @@ SPEC = [
     ("timed_doors", False, False, False, False, False, True),
     ("noisy_floors", 0, 0, 0, 0, 0, 6),
 ]
-LEVELS = [EASY, NORMAL, HARD, VERY_HARD, HELL, THEORY]
+LEVELS = [EASY, NORMAL, HARD, VERY_HARD, HELL, TRANSCEND]
 
 
 def value_of(cfg, name):
@@ -51,4 +51,4 @@ def test_matches_spec_table(row):
 
 
 def test_menu_order():
-    assert [cfg.key for cfg in DIFFICULTIES] == ["easy", "normal", "hard", "very_hard", "hell", "theory"]
+    assert [cfg.key for cfg in DIFFICULTIES] == ["easy", "normal", "hard", "very_hard", "hell", "transcend"]

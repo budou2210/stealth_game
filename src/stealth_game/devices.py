@@ -1,4 +1,4 @@
-"""地獄より上の難易度（理論値）の仕掛け（ロジックのみ。描画はapp側）。
+"""地獄より上の難易度（超越）の仕掛け（ロジックのみ。描画はapp側）。
 
 - 見張り番：動かずに、その場で向きだけを順に変える鬼（guard.py の Guard に look を渡して作る）
 - 監視カメラ：壁の角に付いて首を振る。映ると、近くの鬼が映った場所を調べに来る
@@ -125,6 +125,17 @@ class TimedDoor:
     def wants_closed(self, t):
         """時刻 t に閉まっているはずか（周期の前半は開き、後半は閉まる）。"""
         return (t / DOOR_PERIOD + self.phase) % 1.0 >= DOOR_OPEN_RATE
+
+    def seconds_until_close(self, t):
+        """時刻 t から、次に閉まる時刻までの秒数（閉まっている間は0）。"""
+        frac = (t / DOOR_PERIOD + self.phase) % 1.0
+        return max(0.0, (DOOR_OPEN_RATE - frac) * DOOR_PERIOD)
+
+    def bounds(self):
+        """扉のセル全体を囲む四角 (x1, y1, x2, y2)（x2, y2 は端のセルの外側の座標）。"""
+        xs = [x for x, _ in self.cells]
+        ys = [y for _, y in self.cells]
+        return min(xs), min(ys), max(xs) + 1, max(ys) + 1
 
 
 def seam_door_cells():

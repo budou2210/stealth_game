@@ -25,7 +25,7 @@ BORROWED = [
     "update_cloak", "helper_kinds", "has_all_items", "is_hunting_phase", "remaining_item_cells",
     "wander_foci", "alert_allies", "share_alerts", "check_caught", "check_exit_reached",
     "make_guards", "play_event_sounds",
-    # 理論値の仕掛け
+    # 超越の仕掛け
     "setup_devices", "door_occupied", "update_timed_doors", "play_door_sound", "update_noisy_floors",
     "sound_floor", "update_cameras", "camera_alarm",
 ]
