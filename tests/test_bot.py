@@ -1,14 +1,10 @@
-"""地獄ボット（tools/hell_bot）のテスト。"""
+"""攻略ボット（tools/bot）のテスト。"""
 
 import random
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-
-from stealth_game.difficulty import HELL, TRANSCEND  # noqa: E402
+from stealth_game.difficulty import HELL, TRANSCEND
 
 DT = 1 / 30
 
@@ -34,7 +30,7 @@ def guard_trace(guards):
 def test_sim_matches_real_game(game_class, cfg, seed):
     """同じ乱数の種・同じ入力なら、シミュレーターと本物のゲームで警備員の動きがフレームごとに一致する
     （超越では、扉の開け閉め・鳴る床・監視カメラも一致する）。"""
-    from hell_bot.sim import Sim
+    from tools.bot.sim import Sim
 
     frames = 900
     game = game_class()
@@ -65,7 +61,7 @@ def test_sim_matches_real_game(game_class, cfg, seed):
 
 def test_snapshot_replays_the_same_future():
     """保存した状態から何度やり直しても、同じ入力なら同じ未来になる（乱数の状態も戻る）。"""
-    from hell_bot.sim import Sim
+    from tools.bot.sim import Sim
 
     sim = Sim(5)
     for frame in range(120):
@@ -85,13 +81,13 @@ def test_snapshot_replays_the_same_future():
 # --- 記録の再生（replay.py） ------------------------------------------------
 
 def make_record(seed, frames):
-    from hell_bot.planner import encode_keys
+    from tools.bot.planner import encode_keys
 
     return {"seed": seed, "keys": encode_keys([frozenset(scripted_keys(f)) for f in range(frames)])}
 
 
 def new_replay(game_class, record):
-    from hell_bot.replay import Replay
+    from tools.bot.play_record import Replay
 
     replay = Replay(record, 1.0)
     replay.mouseWatcherNode.isButtonDown.return_value = False  # 本物のキーボードは何も押していない
@@ -158,9 +154,9 @@ def test_replay_pause_keeps_record_in_sync(game_class):
 
 def test_rewind_keeps_only_the_successful_branch():
     """巻き戻した後の記録を最初から再生すると、ボットの今の状態とぴったり一致する（失敗した流れが混ざらない）。"""
-    from hell_bot.danger import DangerMap
-    from hell_bot.planner import Bot
-    from hell_bot.sim import Sim
+    from tools.bot.danger import DangerMap
+    from tools.bot.planner import Bot
+    from tools.bot.sim import Sim
 
     bot = Bot(Sim(8), DangerMap())
     bot.save_checkpoint()
@@ -186,9 +182,9 @@ def test_rewind_keeps_only_the_successful_branch():
 
 def test_heads_for_exit_when_all_items_were_taken_without_a_race():
     """競走を経ずに8個とも集めてしまっても止まらず、出口へ向かう入力を返す。"""
-    from hell_bot.danger import DangerMap
-    from hell_bot.planner import Bot
-    from hell_bot.sim import Sim
+    from tools.bot.danger import DangerMap
+    from tools.bot.planner import Bot
+    from tools.bot.sim import Sim
 
     bot = Bot(Sim(8), DangerMap())
     bot.sim.items_collected = set(range(len(bot.sim.item_cells)))

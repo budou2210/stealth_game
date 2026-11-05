@@ -1,4 +1,4 @@
-# 地獄攻略ボット
+# 攻略ボット
 
 難易度「地獄」をクリアできることを確かめ、クリアの様子を見るための自動プレイです。
 ゲームの状態をコピーして先の展開をシミュレーションする「未来予知」を使っています（人間には同じことはできません）。
@@ -17,7 +17,7 @@
 ### 1. 挑戦する（run）
 
 ```
-uv run python -m tools.hell_bot.run --attempts 8
+uv run python -m tools.bot.run --attempts 8
 ```
 
 | オプション | 意味 | 初期値 |
@@ -28,7 +28,7 @@ uv run python -m tools.hell_bot.run --attempts 8
 | `--max-minutes` | 1回の挑戦の計算時間の上限（分）。超えたら打ち切る | 15 |
 | `--seed` | 配置を1つに決める（選び分けをしない） | なし |
 | `--level` | 遊ぶ難易度（`hell`＝地獄、`transcend`＝超越） | hell |
-| `--results` | 結果を保存するフォルダ | `tools/hell_bot/results/<難易度>`（地獄は `results/hell`、超越は `results/transcend`） |
+| `--results` | 結果を保存するフォルダ | `bot_results/<難易度>`（地獄は `bot_results/hell`、超越は `bot_results/transcend`） |
 
 注意：
 
@@ -39,7 +39,7 @@ uv run python -m tools.hell_bot.run --attempts 8
 ### 2. 記録の後半をやり直して縮める（refine）
 
 ```
-uv run python -m tools.hell_bot.refine --seed 2214
+uv run python -m tools.bot.refine --seed 2214
 ```
 
 クリアの記録を途中まで再生し、そこから動きを変えて残りをやり直します。
@@ -48,20 +48,20 @@ uv run python -m tools.hell_bot.refine --seed 2214
 
 | オプション | 意味 | 初期値 |
 |---|---|---|
-| `--seed` | やり直す記録の種（`results/<難易度>/wins/seed_<種>.json`）。必須 | なし |
+| `--seed` | やり直す記録の種（`bot_results/<難易度>/wins/seed_<種>.json`）。必須 | なし |
 | `--rounds` | 速くなったときに、くり返す回数の上限 | 3 |
 | `--variants` | 1つの時点から試す動きの数 | 4 |
 | `--workers` | 同時に動かす数 | 8 |
-| `--results` | 結果のフォルダ | `tools/hell_bot/results/<難易度>` |
+| `--results` | 結果のフォルダ | `bot_results/<難易度>` |
 
 - 書き換える前の記録は、初回だけ `seed_<種>.orig.json` として残します。
 - 新しい記録は、最初から再生して同じ結果になることを確かめてから保存します。
 - 1つの記録で2〜13分ほどかかり、元の記録から約1割縮みます（例：2214 は 70.83秒 → 62.3秒）。
 
-### 3. 再生する（replay）
+### 3. 再生する（play_record）
 
 ```
-uv run python -m tools.hell_bot.replay tools/hell_bot/results/hell/wins/seed_2214.json
+uv run python -m tools.bot.play_record bot_results/hell/wins/seed_2214.json
 ```
 
 | オプション | 意味 |
@@ -70,7 +70,7 @@ uv run python -m tools.hell_bot.replay tools/hell_bot/results/hell/wins/seed_221
 
 - 再生中のキー：Tab（視点）・F（足音の範囲）・P（一時停止）・R（最初から再生し直す）・Esc（終了）。
 - M（難易度選択）は使えません。クリアしても、ベストタイムには記録されません。
-- `results/<難易度>/runs/` の記録（クリアできなかった回）も再生できます。どこで失敗したかを見るのに使えます。
+- `bot_results/<難易度>/runs/` の記録（クリアできなかった回）も再生できます。どこで失敗したかを見るのに使えます。
 
 ### 4. 切り替えスイッチ（BOT_OPTIONS）
 
@@ -100,7 +100,7 @@ uv run python -m tools.hell_bot.replay tools/hell_bot/results/hell/wins/seed_221
 ### 平均値（多くの配置で、安定して速くクリアする）
 
 ```
-uv run python -m tools.hell_bot.run --attempts 8 --variants 3
+uv run python -m tools.bot.run --attempts 8 --variants 3
 ```
 
 - スイッチは付けません。
@@ -112,33 +112,33 @@ uv run python -m tools.hell_bot.run --attempts 8 --variants 3
 1. 配置をたくさん回して、速いクリアの元を集めます（16配置で30分ほど）。
 
    ```
-   uv run python -m tools.hell_bot.run --attempts 16
+   uv run python -m tools.bot.run --attempts 16
    ```
 
-2. 速かった上位3つほどを、それぞれやり直して縮めます。速い記録の種は `results/hell/attempts.jsonl` の `time` が小さい行で分かります。
+2. 速かった上位3つほどを、それぞれやり直して縮めます。速い記録の種は `bot_results/hell/attempts.jsonl` の `time` が小さい行で分かります。
 
    ```
-   uv run python -m tools.hell_bot.refine --seed 2214
+   uv run python -m tools.bot.refine --seed 2214
    ```
 
 3. 一番速い記録を、速度重視でさらにやり直します（例：2214 は 62.3秒 → 60.5秒）。
 
    ```
    $env:BOT_OPTIONS="V"
-   uv run python -m tools.hell_bot.refine --seed 2214
+   uv run python -m tools.bot.refine --seed 2214
    ```
 
    コマンドプロンプトでは、1行目を `set BOT_OPTIONS=V` にします。
 
 ### 超越で動かす
 
-run と refine に `--level transcend` を付けます。結果（危険度の地図・記録）は `results/transcend/` に、地獄（`results/hell/`）とは別に残ります。
-記録には難易度が入っているので、replay は付けなくてもその難易度で再生します。
+run と refine に `--level transcend` を付けます。結果（危険度の地図・記録）は `bot_results/transcend/` に、地獄（`bot_results/hell/`）とは別に残ります。
+記録には難易度が入っているので、play_record は付けなくてもその難易度で再生します。
 
 ```
-uv run python -m tools.hell_bot.run --level transcend --attempts 16
-uv run python -m tools.hell_bot.refine --level transcend --seed <種>
-uv run python -m tools.hell_bot.replay tools/hell_bot/results/transcend/wins/seed_<種>.json
+uv run python -m tools.bot.run --level transcend --attempts 16
+uv run python -m tools.bot.refine --level transcend --seed <種>
+uv run python -m tools.bot.play_record bot_results/transcend/wins/seed_<種>.json
 ```
 
 超越では、ボットは監視カメラに映ること・閉まった扉のマスにいることも「見つかる」と同じに扱って避けます。
@@ -146,7 +146,7 @@ uv run python -m tools.hell_bot.replay tools/hell_bot/results/transcend/wins/see
 
 ## 結果のファイル
 
-`tools/hell_bot/results/<難易度>/`（地獄は `hell`、超越は `transcend`）に保存します（GitHub には上げません）。
+`bot_results/<難易度>/`（地獄は `hell`、超越は `transcend`）に保存します（GitHub には上げません）。
 
 | ファイル | 内容 |
 |---|---|
@@ -167,9 +167,10 @@ uv run python -m tools.hell_bot.replay tools/hell_bot/results/transcend/wins/see
 | `danger.py` | 危険度の地図と、配置の選び分け |
 | `run.py` | 挑戦をくり返し、結果を保存する |
 | `refine.py` | 記録の後半をやり直して縮める |
-| `replay.py` | 記録を本物のゲーム画面で再生する |
+| `play_record.py` | 記録を本物のゲーム画面で再生する |
 | `worker.py` | 挑戦を別のプロセスで動かす（同時に走らせるため） |
 | `options.py` | 切り替えスイッチ |
+| `levels.py` | 遊ぶ難易度（`--level`）と、結果のフォルダの場所 |
 
 主な工夫：
 

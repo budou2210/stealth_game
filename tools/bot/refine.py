@@ -5,10 +5,10 @@
 今の記録より速くクリアできたら記録を書き換え、新しい記録からもう一度くり返す（--rounds 回まで）。
 
 使い方（プロジェクトのフォルダで）:
-    uv run python -m tools.hell_bot.refine --seed 3203
-    uv run python -m tools.hell_bot.refine --seed 3203 --rounds 5 --variants 6
+    uv run python -m tools.bot.refine --seed 3203
+    uv run python -m tools.bot.refine --seed 3203 --rounds 5 --variants 6
 
-読む・書く記録: tools/hell_bot/results/<難易度>/wins/seed_<種>.json（速くなったときだけ書き換える）。
+読む・書く記録: bot_results/<難易度>/wins/seed_<種>.json（速くなったときだけ書き換える）。
 書き換える前の記録は、初回だけ seed_<種>.orig.json として残す。
 """
 
@@ -26,7 +26,6 @@ from .planner import Bot, decode_keys, encode_keys
 from .levels import LEVELS, level_key, results_for, set_level
 from .sim import DT, Sim
 
-RESULTS = Path(__file__).resolve().parent / "results"
 CUT_STEP = 5.0  # 戻る時点の間隔（秒）
 CUTS = 8  # 戻る時点の数（終わりから CUT_STEP×CUTS 秒前まで）
 MAX_COMPUTE_SECONDS = 300  # 1回のやり直しの計算時間の上限
@@ -78,7 +77,7 @@ def main():
     parser.add_argument("--results", type=Path, default=None, help="結果のフォルダ（省くと難易度ごとの標準の場所）")
     args = parser.parse_args()
     set_level(args.level)
-    args.results = args.results or results_for(RESULTS)
+    args.results = args.results or results_for()
 
     path = args.results / "wins" / f"seed_{args.seed}.json"
     record = json.loads(path.read_text(encoding="utf-8"))

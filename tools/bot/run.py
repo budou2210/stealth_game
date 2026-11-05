@@ -1,12 +1,12 @@
-"""地獄への挑戦をくり返し、結果と危険度の地図を保存する。
+"""難易度（標準は地獄）への挑戦をくり返し、結果と危険度の地図を保存する。
 
 使い方（プロジェクトのフォルダで）:
-    uv run python -m tools.hell_bot.run --attempts 20
-    uv run python -m tools.hell_bot.run --attempts 40 --workers 4   （同時に走らせる数を4にする。最初は8つ同時）
-    uv run python -m tools.hell_bot.run --attempts 8 --max-minutes 30   （1回の計算時間の上限を30分にする。最初は15分）
-    uv run python -m tools.hell_bot.run --attempts 8 --variants 3   （同じ配置を、動きを少し変えてさらに3通り試し、一番速いクリアを残す）
+    uv run python -m tools.bot.run --attempts 20
+    uv run python -m tools.bot.run --attempts 40 --workers 4   （同時に走らせる数を4にする。最初は8つ同時）
+    uv run python -m tools.bot.run --attempts 8 --max-minutes 30   （1回の計算時間の上限を30分にする。最初は15分）
+    uv run python -m tools.bot.run --attempts 8 --variants 3   （同じ配置を、動きを少し変えてさらに3通り試し、一番速いクリアを残す）
 
-結果は tools/hell_bot/results/<難易度>/ に保存する（GitHub には上げない）。
+結果は bot_results/<難易度>/ に保存する（GitHub には上げない）。
 - attempts.jsonl: 挑戦ごとの結果（1行に1回）
 - danger.json: 危険度の地図（次回の実行はここから続ける）
 - wins/seed_<種>.json: クリアできた回の入力の記録（replay.py で本物のゲーム画面で再生できる）。同じ種で何度もクリアしたら一番速い回を残す
@@ -29,7 +29,6 @@ from .levels import LEVELS, level_key, results_for, set_level
 from .sim import DT
 from .worker import attempt
 
-RESULTS = Path(__file__).resolve().parent / "results"
 SEED_POOL = range(0, 5000)  # この範囲の種（アイテムの配置）から選ぶ
 
 
@@ -57,7 +56,7 @@ def save_result(results, result, visited, keys, danger_map, danger_path, attempt
 
 
 def main():
-    parser = argparse.ArgumentParser(description="地獄への挑戦をくり返す")
+    parser = argparse.ArgumentParser(description="地獄（--level で選んだ難易度）への挑戦をくり返す")
     parser.add_argument("--attempts", type=int, default=10, help="挑戦する回数")
     parser.add_argument("--level", choices=LEVELS, default="hell",
                         help="遊ぶ難易度（transcend＝超越）。結果は難易度ごとに別のフォルダに残す")
@@ -71,7 +70,7 @@ def main():
 
     set_level(args.level)
     world = World()
-    results = args.results or results_for(RESULTS)
+    results = args.results or results_for()
     danger_path = results / "danger.json"
     attempts_path = results / "attempts.jsonl"
     danger_map = DangerMap.load(danger_path)
