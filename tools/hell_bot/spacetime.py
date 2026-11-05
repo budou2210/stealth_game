@@ -7,14 +7,18 @@
    1区切りでできる動きは「止まる」「忍び足で上下左右に1マス」「走って上下左右に2マス」。
    走れるのは、走っても見つからず（走ると視界に入る距離が伸びる）、足音も聞かれないときだけ。
 
+理論値では、監視カメラの視界（時刻で決まる）も「見つかるマス」に入れ、閉まっている扉のマスは「いられないマス」にする。
+扉の向こうが見えるかどうかは、そのサンプルの時刻の扉の開け閉めで調べる。
+
 徘徊型（紫）は目的地を選ぶときにプレイヤーの位置を少し参考にするので、予定表は完全ではない。
 そのため、実行する前に本物どおりのシミュレーターで確かめる（planner.py）。
 """
 
 import math
 from collections import OrderedDict
+from contextlib import contextmanager
 
-from stealth_game.constants import NEAR_SENSE_RADIUS, SOUND_WALL_MUFFLE
+from stealth_game.constants import CAMERA_HALF_ANGLE, CAMERA_VIEW_RANGE, NEAR_SENSE_RADIUS, SOUND_WALL_MUFFLE
 from stealth_game.grid import world_to_cell
 
 from .options import enabled
@@ -36,18 +40,34 @@ SNEAK = "sneak"
 RUN = "run"
 
 
+@contextmanager
+def timed_doors_as(world, closed):
+    """しばらくの間、時間で開け閉めする扉の状態を closed にする（World はシミュレーターの状態どうしで共有しているので、
+    終わったら元に戻す）。"""
+    saved = world.timed_closed
+    world.timed_closed = closed
+    try:
+        yield
+    finally:
+        world.timed_closed = saved
+
+
 def predict_guards(sim, slots=HORIZON_SLOTS):
-    """プレイヤーを透明にして止めたまま、警備員の位置と向きを SAMPLE_FRAMES ごとに記録する。"""
+    """プレイヤーを透明にして止めたまま、警備員の位置と向きを SAMPLE_FRAMES ごとに記録する。
+    (警備員の並びの列, 時刻の列, 閉まっている扉のマスの列) を返す。"""
     s = sim.snapshot()
     s.cloak_timer = 1e9  # 透明：見られず、触れても捕まらない（足音も出さない＝止まっている）
-    samples = []
-    for _ in range(slots * SLOT_SAMPLES + 1):
-        samples.append([(g.x, g.y, g.heading) for g in s.guards])
-        for _ in range(SAMPLE_FRAMES):
-            s.step(frozenset())
-            if s.done:
-                break
-    return samples
+    samples, times, doors = [], [], []
+    with timed_doors_as(sim.world, sim.world.timed_closed):
+        for _ in range(slots * SLOT_SAMPLES + 1):
+            samples.append([(g.x, g.y, g.heading) for g in s.guards])
+            times.append(s.elapsed)
+            doors.append(s.world.timed_closed)
+            for _ in range(SAMPLE_FRAMES):
+                s.step(frozenset())
+                if s.done:
+                    break
+    return samples, times, doors
 
 
 # 計算を速くするための覚え書き。どれも「同じ入力なら同じ結果」になるものだけを覚えるので、結果は変わらない。
@@ -64,7 +84,7 @@ def floor_near(world, gx, gy, radius):
     """(gx, gy) のマスを中心に、半径 radius の四角の範囲にある床のマス（壁を除く）。"""
     r = int(math.ceil(radius))
     gcx, gcy = world_to_cell(gx, gy)
-    key = (gcx, gcy, r, world.doors_closed)
+    key = (gcx, gcy, r, world.doors_closed, world.timed_closed)
     cells = _FLOOR_NEAR.get(key)
     if cells is None:
         cells = [
@@ -86,7 +106,7 @@ def _remember(memo, key, value):
 
 def guard_seen(world, gx, gy, heading, cfg):
     """警備員1人から見えるマス：(忍び足で見つかるマス, 走っていると見つかるマス)。"""
-    key = (gx, gy, heading, world.doors_closed)
+    key = (gx, gy, heading, world.doors_closed, world.timed_closed)
     hit = _SEEN_MEMO.get(key)
     if hit is not None:
         _SEEN_MEMO.move_to_end(key)
@@ -114,7 +134,7 @@ def guard_seen(world, gx, gy, heading, cfg):
 
 def guard_heard(world, gx, gy, cfg):
     """警備員1人に、走ると足音を聞かれるマス（壁越しは届く距離が縮む）。"""
-    key = (gx, gy, world.doors_closed)
+    key = (gx, gy, world.doors_closed, world.timed_closed)
     hit = _HEARD_MEMO.get(key)
     if hit is not None:
         _HEARD_MEMO.move_to_end(key)
@@ -130,6 +150,33 @@ def guard_heard(world, gx, gy, cfg):
         if dist <= through_wall or world.has_line_of_sight(gx, gy, tx, ty):
             heard.append(cell)
     return _remember(_HEARD_MEMO, key, frozenset(heard))
+
+
+def camera_seen(world, camera, heading, cfg):
+    """監視カメラ1台から見えるマス：(忍び足で映るマス, 走っていると映るマス)。"""
+    key = ("camera", camera.x, camera.y, round(heading, 4), world.timed_closed)
+    hit = _SEEN_MEMO.get(key)
+    if hit is not None:
+        _SEEN_MEMO.move_to_end(key)
+        return hit
+    run_view = CAMERA_VIEW_RANGE + VIEW_MARGIN
+    sneak_view = CAMERA_VIEW_RANGE * cfg.sneak_view_rate + VIEW_MARGIN
+    half = CAMERA_HALF_ANGLE + ANGLE_MARGIN
+    sneak_seen, run_seen = [], []
+    for cell in floor_near(world, camera.x, camera.y, run_view):
+        tx, ty = cell[0] + 0.5, cell[1] + 0.5
+        dist = math.hypot(tx - camera.x, ty - camera.y)
+        if dist > run_view:
+            continue
+        if dist > 0.7:  # 体の大きさぶん、カメラのすぐそばは向きに関係なく危ないとみなす
+            diff = (math.atan2(ty - camera.y, tx - camera.x) - heading + math.pi) % (2 * math.pi) - math.pi
+            if abs(diff) > half:
+                continue
+        if world.has_line_of_sight(camera.x, camera.y, tx, ty):
+            run_seen.append(cell)
+            if dist <= sneak_view:
+                sneak_seen.append(cell)
+    return _remember(_SEEN_MEMO, key, (frozenset(sneak_seen), frozenset(run_seen)))
 
 
 def visible_cells(world, guards, cfg, px, py):
@@ -154,12 +201,29 @@ def audible_cells(world, guards, cfg, px, py):
     return heard
 
 
+def sample_seen(sim, guards, t, closed, px, py):
+    """1つのサンプル（時刻 t、閉まっている扉 closed）で見つかるマス。閉まっている扉のマスにも、いられない。"""
+    world, cfg = sim.world, sim.difficulty
+    with timed_doors_as(world, closed):
+        sneak, run = visible_cells(world, guards, cfg, px, py)
+        for camera in sim.cameras:
+            if math.hypot(camera.x - px, camera.y - py) > RELEVANT_DISTANCE:
+                continue
+            cam_sneak, cam_run = camera_seen(world, camera, camera.heading_at(t), cfg)
+            sneak = sneak | cam_sneak
+            run = run | cam_run
+    if closed:
+        sneak = sneak | closed
+        run = run | closed
+    return sneak, run
+
+
 def danger_schedule(sim, slots=HORIZON_SLOTS):
     """区切りごとの (忍び足で危ないマス, 走ると危ないマス)。その区切りの間に一度でも危ないマスを全部含む。"""
-    samples = predict_guards(sim, slots)
+    samples, times, doors = predict_guards(sim, slots)
     px, py = sim.player.x, sim.player.y
     world, cfg = sim.world, sim.difficulty
-    seen = [visible_cells(world, guards, cfg, px, py) for guards in samples]
+    seen = [sample_seen(sim, guards, t, closed, px, py) for guards, t, closed in zip(samples, times, doors)]
     schedule = []
     for k in range(slots):
         first, last = k * SLOT_SAMPLES, (k + 1) * SLOT_SAMPLES
@@ -169,8 +233,9 @@ def danger_schedule(sim, slots=HORIZON_SLOTS):
             run_unsafe |= seen[i][1]
         # 足音は区切りの最初と最後の並びで調べる（余裕を広めにとってある）。V（速度重視）のときは足音を気にしない
         if not enabled("V"):
-            run_unsafe |= audible_cells(world, samples[first], cfg, px, py)
-            run_unsafe |= audible_cells(world, samples[last], cfg, px, py)
+            for i in (first, last):
+                with timed_doors_as(world, doors[i]):
+                    run_unsafe |= audible_cells(world, samples[i], cfg, px, py)
         schedule.append((sneak_unsafe, run_unsafe))
     return schedule
 
@@ -199,6 +264,11 @@ def plan_path(world, start, schedule, field, forbidden=frozenset(), floor_value=
     def value(cell):
         return max(field.dist.get(cell, math.inf), floor_value)
 
+    with timed_doors_as(world, frozenset()):  # 扉は開いているものとして動きを考え、閉まる時刻は予定表で避ける
+        return _plan_path(world, start, schedule, value, forbidden)
+
+
+def _plan_path(world, start, schedule, value, forbidden):
     early = enabled("C") or enabled("V")
     layer = {start: value(start)}
     reached = {start: 0}  # {マス: 経路の中で、一番近づいた距離に初めて届いた区切り}（C のとき使う）

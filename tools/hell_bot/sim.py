@@ -10,11 +10,12 @@ import random
 
 from stealth_game.app.game import StealthGame
 from stealth_game.constants import HELPER_MAX_HELD
-from stealth_game.difficulty import HELL
 from stealth_game.items import pick_item_cells
 from stealth_game.layout import PLAYER_START
 from stealth_game.player import Player
 from stealth_game.world import World
+
+from .levels import level_cfg
 
 DT = 1 / 30  # 1コマの秒数。ボットも記録の再生もこの間隔で進める
 
@@ -38,8 +39,10 @@ class _NoNode:
 
 
 class Sim:
-    def __init__(self, seed, cfg=HELL, world=None):
-        """seed の乱数で、ゲームを始めた直後の状態を作る（本物の start_game と同じ順番で乱数を使う）。"""
+    def __init__(self, seed, cfg=None, world=None):
+        """seed の乱数で、ゲームを始めた直後の状態を作る（本物の start_game と同じ順番で乱数を使う）。
+        cfg を省くと、--level で選んだ難易度（標準は地獄）。"""
+        cfg = cfg or level_cfg()
         self.world = world or World()
         self.seed = seed
         random.seed(seed)

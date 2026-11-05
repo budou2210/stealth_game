@@ -17,7 +17,7 @@ from pathlib import Path
 from panda3d.core import ClockObject
 
 from stealth_game.app.game import StealthGame
-from stealth_game.difficulty import HELL
+from stealth_game.difficulty import DIFFICULTIES
 from stealth_game.texts import TEXTS
 
 from .planner import decode_keys
@@ -48,6 +48,7 @@ class Replay(StealthGame):
     def __init__(self, record, speed):
         super().__init__()
         self.record_seed = record["seed"]
+        self.record_level = record.get("level", "hell")  # 古い記録には難易度がない（地獄）
         self.recorded_keys = decode_keys(record["keys"])
         self.replay_text = REPLAY_TEXTS["ja" if self.text is TEXTS["ja"] else "en"]
         self.speed = speed
@@ -63,7 +64,7 @@ class Replay(StealthGame):
         self.pending = 0.0
         self.finished_shown = False
         random.seed(self.record_seed)
-        self.start_game(HELL)
+        self.start_game(next(cfg for cfg in DIFFICULTIES if cfg.key == self.record_level))
 
     # --- ゲームの動きを、再生用に変える部分 -------------------------------
     def bind_events(self):

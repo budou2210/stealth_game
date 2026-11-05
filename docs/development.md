@@ -32,6 +32,7 @@ uv run pytest
 | `tests/test_difficulty.py` | 難易度の数値が `docs/design.md` の仕様表どおり |
 | `tests/test_hud.py` | 操作説明・出現のお知らせ・足音の範囲の表示と設定 |
 | `tests/test_records.py` | ベストタイムの保存・読み込み・更新の判定 |
+| `tests/test_devices.py` | 理論値の仕掛け：置き場所、見張り番の向き、カメラの視界と呼び出し、扉の開け閉め（人が乗っている間は閉めない）、鳴る床の範囲と鳴り方 |
 | `tests/test_replay.py` | ベスト記録のリプレイ：保存・読み込み、記録と再生で展開が同じになる（一時停止・やり直しを挟んでも）、ベスト更新のときだけ保存 |
 | `tests/test_pause_and_best.py` | 一時停止で全部止まること、クリア時のベストタイムの記録と表示 |
 | `tests/test_audio.py` | BGMの切り替え・効果音を鳴らす場面（音は偽物に差し替える） |
@@ -69,6 +70,7 @@ src/stealth_game/
 ├── items.py         アイテムの配置
 ├── records.py       ベストタイムの保存・読み込み
 ├── replays.py       ベスト記録のリプレイの保存・読み込み
+├── devices.py       理論値の仕掛け（見張り番の持ち場・監視カメラ・時間で開け閉めする扉・鳴る床の置き場所と動き）
 ├── assets/sounds/   BGM・効果音のファイル（魔王魂。一覧は docs/design.md）
 ├── assets/images/   タイトル画面の画像
 ├── render/          Panda3Dのメッシュ作成・全体表示カメラの計算
@@ -82,6 +84,7 @@ src/stealth_game/
     ├── helpers.py   お助けアイテム
     ├── audio.py     BGMと効果音（ファイルの一覧・音量・鳴らす場面）
     ├── replay.py    ベスト記録のリプレイ（プレイ中の記録と、難易度選択の画面からの再生）
+    ├── devices.py   理論値の仕掛けの進行（Panda3Dを使わない。ボットのシミュレーターも借りる）
     └── title.py     タイトル画面（起動したときだけ出す）
 ```
 

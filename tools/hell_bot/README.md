@@ -8,6 +8,7 @@
 - 地獄に挑戦し、クリアできた回の入力を記録する（32配置中、27〜31配置をクリア）
 - 記録を本物のゲーム画面で再生する
 - 速いクリアの記録の後半をやり直して、さらに縮める（これまでの最速は 60.5秒）
+- 難易度「理論値」にも挑戦できる（`--level theory`。下の「理論値で動かす」）
 
 コマンドはすべて、プロジェクトのフォルダで実行します。PowerShell でもコマンドプロンプトでも動きます（書き方が違うのは、下の「切り替えスイッチ」の設定だけです）。
 
@@ -26,7 +27,8 @@ uv run python -m tools.hell_bot.run --attempts 8
 | `--variants` | 同じ配置を、動きを少し変えてさらに何通り試すか（一番速いクリアを残す。計算は 1+この数 倍） | 0 |
 | `--max-minutes` | 1回の挑戦の計算時間の上限（分）。超えたら打ち切る | 15 |
 | `--seed` | 配置を1つに決める（選び分けをしない） | なし |
-| `--results` | 結果を保存するフォルダ | `tools/hell_bot/results` |
+| `--level` | 遊ぶ難易度（`hell`＝地獄、`theory`＝理論値） | hell |
+| `--results` | 結果を保存するフォルダ | 地獄は `tools/hell_bot/results`、理論値は `tools/hell_bot/results/theory` |
 
 注意：
 
@@ -127,6 +129,20 @@ uv run python -m tools.hell_bot.run --attempts 8 --variants 3
    ```
 
    コマンドプロンプトでは、1行目を `set BOT_OPTIONS=V` にします。
+
+### 理論値で動かす
+
+run と refine に `--level theory` を付けます。結果（危険度の地図・記録）は `results/theory/` に、地獄とは別に残ります。
+記録には難易度が入っているので、replay は付けなくてもその難易度で再生します。
+
+```
+uv run python -m tools.hell_bot.run --level theory --attempts 16
+uv run python -m tools.hell_bot.refine --level theory --seed <種>
+uv run python -m tools.hell_bot.replay tools/hell_bot/results/theory/wins/seed_<種>.json
+```
+
+理論値では、ボットは監視カメラに映ること・閉まった扉のマスにいることも「見つかる」と同じに扱って避けます。
+鳴る床は避けませんが、音で近くの鬼が調べに来るような動きは、実行前の確かめで取りやめます。
 
 ## 結果のファイル
 

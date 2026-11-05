@@ -25,7 +25,7 @@ from stealth_game.layout import EXIT_CELL
 
 from .options import enabled
 from .sim import DT
-from .spacetime import RUN, SAMPLE_FRAMES, SLOT_SAMPLES, SNEAK, danger_schedule, plan_path
+from .spacetime import RUN, SAMPLE_FRAMES, SLOT_SAMPLES, SNEAK, danger_schedule, plan_path, timed_doors_as
 
 SEGMENT_FRAMES = 12  # 1区切りのコマ数（0.4秒）。この間は同じ動きを続ける
 DEPTH = 6  # 何区切り先まで試すか（2.4秒）
@@ -216,8 +216,9 @@ class Bot:
 
     # --- 経路 -----------------------------------------------------------
     def field(self, target):
-        if target not in self.fields:
-            self.fields[target] = Field(self.world, target, self.danger_map, self.danger_weight)
+        if target not in self.fields:  # 時間で開け閉めする扉は、開いているものとして距離を測る
+            with timed_doors_as(self.world, frozenset()):
+                self.fields[target] = Field(self.world, target, self.danger_map, self.danger_weight)
         return self.fields[target]
 
     def plan_order(self):
@@ -291,6 +292,7 @@ class Bot:
         s = node.sim.snapshot()
         child = Node(s, node.first or move, node.penalty, node.collected, node.spotted, False, node.heard)
         before = len(s.items_collected)
+        alarms = s.camera_alarms
         heard = set(node.heard)
         for _ in range(SEGMENT_FRAMES):
             s.step(move_keys(s, move, field))
@@ -298,7 +300,7 @@ class Bot:
                 child.dead = True  # 捕まった／最後のアイテムを競走の準備なしに拾ってしまった
                 return child
             spotted, alert, _ = threat(s)
-            if spotted:
+            if spotted or s.camera_alarms > alarms:  # 監視カメラに映ったのも、見つかったのと同じに扱う
                 child.spotted = True
             if alert > ALERT_FREE:
                 child.penalty += ALERT_PENALTY * (alert - ALERT_FREE) / SEGMENT_FRAMES
@@ -429,6 +431,7 @@ class Bot:
         """
         s = self.sim.snapshot()
         known = {g.spawn: g.last_known for g in s.guards}
+        alarms = s.camera_alarms
         avoid = forbidden_items(self, forbidden)
         path = list(steps) + list(following)
         keys_log = []
@@ -442,7 +445,7 @@ class Bot:
                 s.step(keys)
                 keys_log.append(keys)
                 spotted, alert, _ = threat(s)
-                if s.state == "lose" or spotted or alert > VALID_ALERT:
+                if s.state == "lose" or spotted or alert > VALID_ALERT or s.camera_alarms > alarms:
                     return None
                 if any(i in s.items_collected for i in avoid):
                     return None

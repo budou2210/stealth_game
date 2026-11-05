@@ -25,6 +25,7 @@ from pathlib import Path
 from stealth_game.world import World
 
 from .danger import DangerMap, choose_seed
+from .levels import LEVELS, level_key, results_for, set_level
 from .sim import DT
 from .worker import attempt
 
@@ -44,7 +45,7 @@ def save_result(results, result, visited, keys, danger_map, danger_path, attempt
     with attempts_path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(result, ensure_ascii=False) + "\n")
     record = {"seed": result["seed"], "dt": DT, "time": result["time"], "outcome": result["outcome"],
-              "variant": result.get("variant", 0), "keys": keys}
+              "variant": result.get("variant", 0), "level": level_key(), "keys": keys}
     win = result["outcome"] == "win"
     folder = results / ("wins" if win else "runs")
     folder.mkdir(exist_ok=True)
@@ -58,16 +59,19 @@ def save_result(results, result, visited, keys, danger_map, danger_path, attempt
 def main():
     parser = argparse.ArgumentParser(description="地獄への挑戦をくり返す")
     parser.add_argument("--attempts", type=int, default=10, help="挑戦する回数")
+    parser.add_argument("--level", choices=LEVELS, default="hell",
+                        help="遊ぶ難易度（theory＝理論値）。結果は難易度ごとに別のフォルダに残す")
     parser.add_argument("--workers", type=int, default=8, help="同時に走らせる挑戦の数（最初は8。PCのコア数まで）")
     parser.add_argument("--seed", type=int, help="この種だけを試す（選び分けをしない）")
-    parser.add_argument("--results", type=Path, default=RESULTS, help="結果を保存するフォルダ")
+    parser.add_argument("--results", type=Path, default=None, help="結果を保存するフォルダ（省くと難易度ごとの標準の場所）")
     parser.add_argument("--max-minutes", type=float, default=15.0, help="1回の挑戦の計算時間の上限（分）。超えたら打ち切る")
     parser.add_argument("--variants", type=int, default=0,
                         help="同じ配置を、動きを少し変えてさらに何通り試すか（一番速いクリアを残す。計算は 1+この数 倍かかる）")
     args = parser.parse_args()
 
+    set_level(args.level)
     world = World()
-    results = args.results
+    results = args.results or results_for(RESULTS)
     danger_path = results / "danger.json"
     attempts_path = results / "attempts.jsonl"
     danger_map = DangerMap.load(danger_path)
