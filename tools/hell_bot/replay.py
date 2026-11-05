@@ -1,7 +1,7 @@
 """ボットの挑戦の記録を、本物のゲーム画面で再生する。
 
 使い方（プロジェクトのフォルダで）:
-    uv run python -m tools.hell_bot.replay tools/hell_bot/results/wins/seed_123.json
+    uv run python -m tools.hell_bot.replay tools/hell_bot/results/hell/wins/seed_123.json
     uv run python -m tools.hell_bot.replay <記録のファイル> --speed 2   （2倍速）
 
 同じ乱数の種・同じ入力・同じコマの間隔（1/30秒）で進めるので、ボットが試したとおりの動きになる。
@@ -122,7 +122,7 @@ class Replay(StealthGame):
 
 def main():
     parser = argparse.ArgumentParser(description="ボットの記録を本物のゲーム画面で再生する")
-    parser.add_argument("record", type=Path, help="記録のファイル（results/wins/ や results/runs/ の .json）")
+    parser.add_argument("record", type=Path, help="記録のファイル（results/<難易度>/wins/ や runs/ の .json）")
     parser.add_argument("--speed", type=float, default=1.0, help="再生の速さ（2なら2倍速）")
     args = parser.parse_args()
     record = json.loads(args.record.read_text(encoding="utf-8"))

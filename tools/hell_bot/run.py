@@ -6,7 +6,7 @@
     uv run python -m tools.hell_bot.run --attempts 8 --max-minutes 30   （1回の計算時間の上限を30分にする。最初は15分）
     uv run python -m tools.hell_bot.run --attempts 8 --variants 3   （同じ配置を、動きを少し変えてさらに3通り試し、一番速いクリアを残す）
 
-結果は tools/hell_bot/results/ に保存する（GitHub には上げない）。
+結果は tools/hell_bot/results/<難易度>/ に保存する（GitHub には上げない）。
 - attempts.jsonl: 挑戦ごとの結果（1行に1回）
 - danger.json: 危険度の地図（次回の実行はここから続ける）
 - wins/seed_<種>.json: クリアできた回の入力の記録（replay.py で本物のゲーム画面で再生できる）。同じ種で何度もクリアしたら一番速い回を残す

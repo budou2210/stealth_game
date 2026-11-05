@@ -28,7 +28,7 @@ uv run python -m tools.hell_bot.run --attempts 8
 | `--max-minutes` | 1回の挑戦の計算時間の上限（分）。超えたら打ち切る | 15 |
 | `--seed` | 配置を1つに決める（選び分けをしない） | なし |
 | `--level` | 遊ぶ難易度（`hell`＝地獄、`transcend`＝超越） | hell |
-| `--results` | 結果を保存するフォルダ | 地獄は `tools/hell_bot/results`、超越は `tools/hell_bot/results/transcend` |
+| `--results` | 結果を保存するフォルダ | `tools/hell_bot/results/<難易度>`（地獄は `results/hell`、超越は `results/transcend`） |
 
 注意：
 
@@ -48,11 +48,11 @@ uv run python -m tools.hell_bot.refine --seed 2214
 
 | オプション | 意味 | 初期値 |
 |---|---|---|
-| `--seed` | やり直す記録の種（`results/wins/seed_<種>.json`）。必須 | なし |
+| `--seed` | やり直す記録の種（`results/<難易度>/wins/seed_<種>.json`）。必須 | なし |
 | `--rounds` | 速くなったときに、くり返す回数の上限 | 3 |
 | `--variants` | 1つの時点から試す動きの数 | 4 |
 | `--workers` | 同時に動かす数 | 8 |
-| `--results` | 結果のフォルダ | `tools/hell_bot/results` |
+| `--results` | 結果のフォルダ | `tools/hell_bot/results/<難易度>` |
 
 - 書き換える前の記録は、初回だけ `seed_<種>.orig.json` として残します。
 - 新しい記録は、最初から再生して同じ結果になることを確かめてから保存します。
@@ -61,7 +61,7 @@ uv run python -m tools.hell_bot.refine --seed 2214
 ### 3. 再生する（replay）
 
 ```
-uv run python -m tools.hell_bot.replay tools/hell_bot/results/wins/seed_2214.json
+uv run python -m tools.hell_bot.replay tools/hell_bot/results/hell/wins/seed_2214.json
 ```
 
 | オプション | 意味 |
@@ -70,7 +70,7 @@ uv run python -m tools.hell_bot.replay tools/hell_bot/results/wins/seed_2214.jso
 
 - 再生中のキー：Tab（視点）・F（足音の範囲）・P（一時停止）・R（最初から再生し直す）・Esc（終了）。
 - M（難易度選択）は使えません。クリアしても、ベストタイムには記録されません。
-- `results/runs/` の記録（クリアできなかった回）も再生できます。どこで失敗したかを見るのに使えます。
+- `results/<難易度>/runs/` の記録（クリアできなかった回）も再生できます。どこで失敗したかを見るのに使えます。
 
 ### 4. 切り替えスイッチ（BOT_OPTIONS）
 
@@ -115,7 +115,7 @@ uv run python -m tools.hell_bot.run --attempts 8 --variants 3
    uv run python -m tools.hell_bot.run --attempts 16
    ```
 
-2. 速かった上位3つほどを、それぞれやり直して縮めます。速い記録の種は `results/attempts.jsonl` の `time` が小さい行で分かります。
+2. 速かった上位3つほどを、それぞれやり直して縮めます。速い記録の種は `results/hell/attempts.jsonl` の `time` が小さい行で分かります。
 
    ```
    uv run python -m tools.hell_bot.refine --seed 2214
@@ -132,7 +132,7 @@ uv run python -m tools.hell_bot.run --attempts 8 --variants 3
 
 ### 超越で動かす
 
-run と refine に `--level transcend` を付けます。結果（危険度の地図・記録）は `results/transcend/` に、地獄とは別に残ります。
+run と refine に `--level transcend` を付けます。結果（危険度の地図・記録）は `results/transcend/` に、地獄（`results/hell/`）とは別に残ります。
 記録には難易度が入っているので、replay は付けなくてもその難易度で再生します。
 
 ```
@@ -146,7 +146,7 @@ uv run python -m tools.hell_bot.replay tools/hell_bot/results/transcend/wins/see
 
 ## 結果のファイル
 
-`tools/hell_bot/results/` に保存します（GitHub には上げません）。
+`tools/hell_bot/results/<難易度>/`（地獄は `hell`、超越は `transcend`）に保存します（GitHub には上げません）。
 
 | ファイル | 内容 |
 |---|---|

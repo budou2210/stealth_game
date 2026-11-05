@@ -8,7 +8,7 @@
     uv run python -m tools.hell_bot.refine --seed 3203
     uv run python -m tools.hell_bot.refine --seed 3203 --rounds 5 --variants 6
 
-読む・書く記録: tools/hell_bot/results/wins/seed_<種>.json（速くなったときだけ書き換える）。
+読む・書く記録: tools/hell_bot/results/<難易度>/wins/seed_<種>.json（速くなったときだけ書き換える）。
 書き換える前の記録は、初回だけ seed_<種>.orig.json として残す。
 """
 
