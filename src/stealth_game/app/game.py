@@ -27,6 +27,7 @@ from ..grid import cell_center, manhattan
 from ..guard import Guard
 from ..items import is_valid_item_cell, pick_item_cells
 from ..layout import EXIT_CELL, PLAYER_START
+from ..devices import build_sentry_posts
 from ..mapgen import build_guard_routes, build_wanderer_spawns
 from ..player import Player, player_cell
 from ..records import load_records, records_path, save_records, update_best
@@ -35,6 +36,7 @@ from ..theme import INITIAL_CAMERA_LOOK, INITIAL_CAMERA_POS
 from ..world import World
 from .audio import AUDIO_PRELOAD_THRESHOLD, LOSE_JINGLE_DELAY, NEW_RECORD_DELAY, AudioMixin
 from .camera import CameraMixin
+from .devices import DevicesMixin
 from .helpers import HelperMixin
 from .hud import HudMixin
 from .input import InputMixin
@@ -46,7 +48,7 @@ from .visuals import VisualsMixin
 
 class StealthGame(
     InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, TitleMixin, HelperMixin, AudioMixin, ReplayMixin,
-    ShowBase,
+    DevicesMixin, ShowBase,
 ):
     def __init__(self):
         loadPrcFileData("", "window-title SNEAKUBE\nwin-size 1100 800")
@@ -67,6 +69,8 @@ class StealthGame(
         self.item_cells = []
         self.items_collected = set()
         self.collect_order = []
+        self.setup_devices()  # 超越の仕掛け（ほかの難易度では空）
+        self.device_nps = []  # 仕掛けの見た目のノード（ゲームを始めるたびに作り直す）
         self.lives = NORMAL.lives
         self.caught_timer = 0.0
         self.held = {kind: 0 for kind in HELPER_MAX_HELD}  # 持っているお助けアイテムの数
@@ -90,6 +94,7 @@ class StealthGame(
         self.setup_camera()
         self.build_level()
         self.build_actors()
+        self.build_device_views()
         self.set_doors_closed(False)
         self.setup_hud()
         self.setup_audio()
@@ -108,6 +113,8 @@ class StealthGame(
         spawns = build_wanderer_spawns() if cfg.wanderers else []
         guards = [Guard(self.world, cfg, route=route) for route in routes]
         guards += [Guard(self.world, cfg, spawn=spawn) for spawn in spawns]
+        if cfg.sentries:  # 超越：見張り番（持ち場の1マスに立ち、向きだけを変える）
+            guards += [Guard(self.world, cfg, route=[post], look=look) for post, look in build_sentry_posts()]
         if cfg.smart_wander:
             for guard in guards:
                 guard.focus_provider = self.wander_foci
@@ -163,6 +170,8 @@ class StealthGame(
         self.collect_order = []  # 拾った順。捕まったら最後に拾ったものから落とす
         self.camera_mode = "overview"  # 始めはマップ全体を映す（Tabで 中間 → 近い へ）
         self.item_cells = pick_item_cells(self.world)
+        self.setup_devices()  # 鳴る床の場所は、アイテムの配置の後に乱数で選ぶ
+        self.build_device_views()
         self.place_item_nodes()
         self.exit_np.setColor(0.8, 0.2, 0.2, 1)
         self.held = {kind: 0 for kind in HELPER_MAX_HELD}
@@ -191,6 +200,7 @@ class StealthGame(
         for guard in self.guards:
             guard.reset()
         self.cloak_timer = 0.0
+        self.floor_under = None
         self.clear_placed_decoys()
         self.message_text.setText("")
         self.snap_camera()
@@ -341,11 +351,14 @@ class StealthGame(
 
     def update_play(self, dt):
         self.elapsed += dt
+        self.update_timed_doors()
         dx, dy = self.read_input()
         self.player.sneaking = self.is_down("sneak")
         self.player.move(dt, dx, dy, self.world)
         self.update_safe_zone()
         self.collect_items()
+        self.update_noisy_floors(dt)
+        self.update_cameras(dt)
         self.notice_timer = max(0.0, self.notice_timer - dt)
         self.update_helpers(dt)
         hunting = self.is_hunting_phase()

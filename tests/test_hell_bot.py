@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 
-from stealth_game.difficulty import HELL  # noqa: E402
+from stealth_game.difficulty import HELL, TRANSCEND  # noqa: E402
 
 DT = 1 / 30
 
@@ -29,9 +29,11 @@ def guard_trace(guards):
     return [(round(g.x, 6), round(g.y, 6), round(g.heading, 6), g.state, round(g.alert, 6)) for g in guards]
 
 
-@pytest.mark.parametrize("seed", [3, 8, 21])
-def test_sim_matches_real_game(game_class, seed):
-    """同じ乱数の種・同じ入力なら、シミュレーターと本物のゲームで警備員の動きがフレームごとに一致する。"""
+@pytest.mark.parametrize("cfg, seed", [(HELL, 3), (HELL, 8), (HELL, 21), (TRANSCEND, 3), (TRANSCEND, 8)],
+                         ids=["hell-3", "hell-8", "hell-21", "transcend-3", "transcend-8"])
+def test_sim_matches_real_game(game_class, cfg, seed):
+    """同じ乱数の種・同じ入力なら、シミュレーターと本物のゲームで警備員の動きがフレームごとに一致する
+    （超越では、扉の開け閉め・鳴る床・監視カメラも一致する）。"""
     from hell_bot.sim import Sim
 
     frames = 900
@@ -40,21 +42,24 @@ def test_sim_matches_real_game(game_class, seed):
     game.is_down = lambda name: name in game.keys
     game.open_menu()
     random.seed(seed)
-    game.start_game(HELL)
+    game.start_game(cfg)
     real = []
     for frame in range(frames):
         game.keys = scripted_keys(frame)
         game.update_play(DT)
-        real.append((round(game.player.x, 6), round(game.player.y, 6), game.state, guard_trace(game.guards)))
+        real.append((round(game.player.x, 6), round(game.player.y, 6), game.state, guard_trace(game.guards),
+                     game.world.timed_closed, game.camera_alarms, game.floor_under))
         if game.state != "play":
             break
 
     assert len(real) > 200, "短すぎて比べたことにならない"
-    sim = Sim(seed)
+    sim = Sim(seed, cfg)
     assert sim.item_cells == game.item_cells
+    assert sim.noisy_floors == game.noisy_floors
     for frame, expected in enumerate(real):
         sim.step(scripted_keys(frame))
-        got = (round(sim.player.x, 6), round(sim.player.y, 6), sim.state, guard_trace(sim.guards))
+        got = (round(sim.player.x, 6), round(sim.player.y, 6), sim.state, guard_trace(sim.guards),
+               sim.world.timed_closed, sim.camera_alarms, sim.floor_under)
         assert got == expected, f"{frame}コマ目で本物とずれた"
 
 

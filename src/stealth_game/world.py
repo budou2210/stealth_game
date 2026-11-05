@@ -15,6 +15,7 @@ class World:
         self.walls = build_walls()
         self.pocket = pocket_cells()  # マップの外に出っ張ったスタート地点の床
         self.doors_closed = False  # Trueの間、安全地帯の扉は壁として扱う
+        self.timed_closed = frozenset()  # 時間で開け閉めする扉のうち、今閉まっているセル（壁として扱う）
         self.costs = self.build_costs()
         self.floor_cells = [
             (x, y) for y in range(MAP_H) for x in range(MAP_W) if not self.walls[y][x]
@@ -34,6 +35,8 @@ class World:
         if not (0 <= cx < MAP_W and 0 <= cy < MAP_H):
             return True
         if self.doors_closed and (cx, cy) in self.safe_doors:
+            return True
+        if self.timed_closed and (cx, cy) in self.timed_closed:
             return True
         return self.walls[cy][cx] == 1
 

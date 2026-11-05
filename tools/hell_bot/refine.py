@@ -23,6 +23,7 @@ from stealth_game.world import World
 
 from .danger import DangerMap
 from .planner import Bot, decode_keys, encode_keys
+from .levels import LEVELS, level_key, results_for, set_level
 from .sim import DT, Sim
 
 RESULTS = Path(__file__).resolve().parent / "results"
@@ -73,8 +74,11 @@ def main():
     parser.add_argument("--rounds", type=int, default=3, help="速くなったら、新しい記録からくり返す回数の上限")
     parser.add_argument("--variants", type=int, default=4, help="1つの時点から試す動きの数")
     parser.add_argument("--workers", type=int, default=8, help="同時に走らせる数")
-    parser.add_argument("--results", type=Path, default=RESULTS, help="結果のフォルダ")
+    parser.add_argument("--level", choices=LEVELS, default="hell", help="記録の難易度（transcend＝超越）")
+    parser.add_argument("--results", type=Path, default=None, help="結果のフォルダ（省くと難易度ごとの標準の場所）")
     args = parser.parse_args()
+    set_level(args.level)
+    args.results = args.results or results_for(RESULTS)
 
     path = args.results / "wins" / f"seed_{args.seed}.json"
     record = json.loads(path.read_text(encoding="utf-8"))
@@ -117,7 +121,7 @@ def main():
         if not orig.exists():
             orig.write_text(json.dumps(record), encoding="utf-8")
         record = {"seed": args.seed, "dt": DT, "time": result["time"], "outcome": "win",
-                  "variant": record.get("variant", 0), "refined": round_no, "keys": keys}
+                  "variant": record.get("variant", 0), "refined": round_no, "level": level_key(), "keys": keys}
         path.write_text(json.dumps(record), encoding="utf-8")
         print(f"{round_no}回目: {result['time']}秒に更新（{result['cut_time']}秒の時点から）", flush=True)
     print(f"最終: {record['time']}秒  計算 {(time.perf_counter() - started) / 60:.1f}分", flush=True)

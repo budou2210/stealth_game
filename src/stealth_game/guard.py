@@ -14,6 +14,7 @@ from .constants import (
     GUARD_TURN_RATE,
     NEAR_SENSE_RADIUS,
     RESPOND_REPLAN,
+    SENTRY_DWELL,
     SOUND_WALL_MUFFLE,
     STUN_SPIN_RATE,
     WANDER_MAX_DISTANCE,
@@ -35,11 +36,13 @@ class Guard:
     SPOTTED = "spotted"  # 「！」を出して、追跡を始める直前の一瞬
     CHASE = "chase"
 
-    def __init__(self, world, cfg, route=None, spawn=None):
-        """routeがあれば順路を巡回、なければspawnから出発してランダムに徘徊する。"""
+    def __init__(self, world, cfg, route=None, spawn=None, look=None):
+        """routeがあれば順路を巡回、なければspawnから出発してランダムに徘徊する。
+        look（向きの列）があれば見張り番：routeの1マスに立ち、その場で向きだけを順に変える。"""
         self.world = world
         self.cfg = cfg
         self.route = route
+        self.look = look
         self.spawn = route[0] if route else spawn
         self.focus_provider = None  # 難しい：徘徊型が狙う注目地点を教えてくれる関数
         self.reset()
@@ -47,9 +50,14 @@ class Guard:
     def is_wanderer(self):
         return self.route is None
 
+    def is_sentry(self):
+        return self.look is not None
+
     def reset(self):
         self.x, self.y = cell_center(self.spawn)
-        self.heading = 0.0
+        self.heading = self.look[0] if self.look else 0.0
+        self.look_index = 0  # 見張り番：今見ている向きの番号
+        self.look_timer = SENTRY_DWELL
         self.state = Guard.PATROL
         self.alert = 0.0
         self.path = []
@@ -276,6 +284,14 @@ class Guard:
             self.pause_timer = None
             self.set_path_to(self.pick_wander_goal())
 
+    def update_lookout(self, dt):
+        """見張り番：持ち場で、決まった秒数ごとに次の向きへ回る（時刻だけで決まり、乱数は使わない）。"""
+        self.look_timer -= dt
+        if self.look_timer <= 0:
+            self.look_index = (self.look_index + 1) % len(self.look)
+            self.look_timer += SENTRY_DWELL
+        self.turn_toward(self.look[self.look_index], dt)
+
     # --- 状態ごとの更新 ---------------------------------------------------
     def update_patrol(self, dt, player):
         if self.alert >= 1.0:
@@ -288,6 +304,9 @@ class Guard:
             return
         if self.is_wanderer():
             self.update_wander(dt)
+            return
+        if self.is_sentry() and self.cell() == self.route[0]:
+            self.update_lookout(dt)
             return
         self.route_index = (self.route_index + 1) % len(self.route)
         self.set_path_to(self.route[self.route_index])
@@ -450,6 +469,8 @@ class Guard:
 
     def move_along_path(self, dt):
         if not self.path:
+            return
+        if self.world.is_wall(*self.path[0]):  # 時間で開け閉めする扉が閉まっている：開くまで手前で待つ
             return
         if self.move_toward(*cell_center(self.path[0]), dt):
             self.path.pop(0)

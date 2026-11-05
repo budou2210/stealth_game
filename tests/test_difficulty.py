@@ -7,30 +7,34 @@ import math
 
 import pytest
 
-from stealth_game.difficulty import DIFFICULTIES, EASY, HARD, HELL, NORMAL, VERY_HARD
+from stealth_game.difficulty import DIFFICULTIES, EASY, HARD, HELL, NORMAL, TRANSCEND, VERY_HARD
 
-# 仕様表の行: (項目, 簡単, 普通, 難しい, 激ムズ, 地獄)
+# 仕様表の行: (項目, 簡単, 普通, 難しい, 激ムズ, 地獄, 超越)
 SPEC = [
-    ("view_range", 8, 8, 9, 10, 10),
-    ("view_angle_deg", 70, 70, 75, 80, 80),
-    ("sneak_view_rate", 0.65, 0.65, 0.72, 0.8, 0.8),
-    ("alert_gain", 1, 1, 1.6, 1.6, 1.6),
-    ("hear_radius", 2.5, 2.5, 3, 6.5, 6.5),
-    ("chase_speed", 3.1, 3.1, 3.96, 3.96, 4.4),
-    ("search_speed", 2.8, 2.8, 3.2, 3.2, 3.2),
-    ("spot_delay", 0.5, 0.5, 0.5, 0.5, 0.0),
-    ("ally_alert_radius", 0, 0, 8, 16, 16),
-    ("ally_alert_max", 0, 0, 2, 0, 0),
-    ("flank_avoid_cost", 0, 0, 0, 6, 6),
-    ("focus_rate", 0, 0, 0.1, 0.3, 0.3),
-    ("hunt_after_all_items", False, False, True, True, True),
-    ("wanderers", False, True, True, True, True),
-    ("lives", 3, 2, 1, 1, 1),
-    ("cloak", True, True, True, True, False),
-    ("flash", True, True, False, False, False),
-    ("decoy_radius", 16, 16, 16, 16, 0),
+    ("view_range", 8, 8, 9, 10, 10, 10.5),
+    ("view_angle_deg", 70, 70, 75, 80, 80, 85),
+    ("sneak_view_rate", 0.65, 0.65, 0.72, 0.8, 0.8, 0.85),
+    ("alert_gain", 1, 1, 1.6, 1.6, 1.6, 1.8),
+    ("hear_radius", 2.5, 2.5, 3, 6.5, 6.5, 7),
+    ("chase_speed", 3.1, 3.1, 3.96, 3.96, 4.4, 4.4),
+    ("search_speed", 2.8, 2.8, 3.2, 3.2, 3.2, 3.2),
+    ("spot_delay", 0.5, 0.5, 0.5, 0.5, 0.0, 0.0),
+    ("ally_alert_radius", 0, 0, 8, 16, 16, 16),
+    ("ally_alert_max", 0, 0, 2, 0, 0, 0),
+    ("flank_avoid_cost", 0, 0, 0, 6, 6, 6),
+    ("focus_rate", 0, 0, 0.1, 0.3, 0.3, 0.4),
+    ("hunt_after_all_items", False, False, True, True, True, True),
+    ("wanderers", False, True, True, True, True, True),
+    ("lives", 3, 2, 1, 1, 1, 1),
+    ("cloak", True, True, True, True, False, False),
+    ("flash", True, True, False, False, False, False),
+    ("decoy_radius", 16, 16, 16, 16, 0, 0),
+    ("sentries", False, False, False, False, False, True),
+    ("cameras", False, False, False, False, False, True),
+    ("timed_doors", False, False, False, False, False, True),
+    ("noisy_floors", 0, 0, 0, 0, 0, 6),
 ]
-LEVELS = [EASY, NORMAL, HARD, VERY_HARD, HELL]
+LEVELS = [EASY, NORMAL, HARD, VERY_HARD, HELL, TRANSCEND]
 
 
 def value_of(cfg, name):
@@ -47,4 +51,4 @@ def test_matches_spec_table(row):
 
 
 def test_menu_order():
-    assert [cfg.key for cfg in DIFFICULTIES] == ["easy", "normal", "hard", "very_hard", "hell"]
+    assert [cfg.key for cfg in DIFFICULTIES] == ["easy", "normal", "hard", "very_hard", "hell", "transcend"]
