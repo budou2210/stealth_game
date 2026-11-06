@@ -21,7 +21,9 @@ from contextlib import contextmanager
 from stealth_game.constants import CAMERA_HALF_ANGLE, CAMERA_VIEW_RANGE, NEAR_SENSE_RADIUS, SOUND_WALL_MUFFLE
 from stealth_game.grid import world_to_cell
 
+from .levels import is_tuned
 from .options import enabled
+from .sim import DT
 
 SAMPLE_FRAMES = 3  # 予定表の細かさ（3コマ＝0.1秒ごと）
 SLOT_SAMPLES = 5  # 経路の1区切り＝5サンプル＝0.5秒（忍び足で1マス、走って2マス進める長さ）
@@ -35,6 +37,10 @@ ANGLE_MARGIN = math.radians(5)  # 視野角の余裕
 NEAR_MARGIN = 0.3  # すぐそばで気づかれる距離の余裕
 HEAR_MARGIN = 0.6  # 足音が届く距離の余裕
 RELEVANT_DISTANCE = 26.0  # プレイヤーからこれより遠い警備員は、予定表に入れない（計算を減らす）
+# 超越だけ：視界・足音の計算を覚えておくとき、位置と向きをこの単位に丸める（歩いている警備員でも覚えた結果が
+# 使えるように）。丸めのずれ（位置は最大0.05、向きは最大1.5°）は、上の余裕（VIEW_MARGIN・ANGLE_MARGIN）の中に収まる
+POS_STEP = 0.1
+HEADING_STEP = math.radians(3)
 
 SNEAK = "sneak"
 RUN = "run"
@@ -52,22 +58,78 @@ def timed_doors_as(world, closed):
         world.timed_closed = saved
 
 
-def predict_guards(sim, slots=HORIZON_SLOTS):
+def guard_states(sim):
+    """予測を使い回してよいかの判定に使う、警備員の位置・向き・状態。"""
+    return tuple((g.x, g.y, g.heading, g.state) for g in sim.guards)
+
+
+class Prediction:
+    """超越だけ：前回の予測（判断は約1秒ごとに12秒先までの予測を使うので、まだ先にある11秒ぶんを使い回す）。
+
+    使い回すのは、今の警備員の位置・向き・状態が、予測のその時刻の値とぴったり同じときだけ
+    （見つかって追われた、巻き戻した、などで違っていれば作り直す）。紫はプレイヤーの位置を少し見て動くので、
+    使い回した予測は作り直した予測と少し違うことがあるが、実行する前に本物どおりのシミュレーターで確かめる。
+    """
+
+    def __init__(self):
+        self.frame = None  # samples[0] の時刻（コマ数）
+        self.samples, self.times, self.doors, self.states = [], [], [], []
+        self.tail = None  # 予測を続けるためのシミュレーター（次に記録するサンプルの時刻の状態）
+        self.reused = 0
+        self.rebuilt = 0
+
+    def start(self, sim):
+        s = sim.snapshot()
+        s.cloak_timer = 1e9  # 透明：見られず、触れても捕まらない（足音も出さない＝止まっている）
+        self.frame = frame_of(sim)
+        self.samples, self.times, self.doors, self.states = [], [], [], []
+        self.tail = s
+        self.rebuilt += 1
+
+    def can_reuse(self, sim):
+        if self.frame is None:
+            return False
+        offset = frame_of(sim) - self.frame
+        if offset < 0 or offset % SAMPLE_FRAMES:
+            return False
+        index = offset // SAMPLE_FRAMES
+        return index < len(self.samples) and self.states[index] == guard_states(sim)
+
+    def drop_until(self, sim):
+        index = (frame_of(sim) - self.frame) // SAMPLE_FRAMES
+        del self.samples[:index], self.times[:index], self.doors[:index], self.states[:index]
+        self.frame = frame_of(sim)
+        self.reused += 1
+
+    def extend(self, count, world):
+        s = self.tail
+        with timed_doors_as(world, world.timed_closed):
+            while len(self.samples) < count:
+                self.samples.append([(g.x, g.y, g.heading) for g in s.guards])
+                self.states.append(guard_states(s))
+                self.times.append(s.elapsed)
+                self.doors.append(s.world.timed_closed)
+                for _ in range(SAMPLE_FRAMES):
+                    s.step(frozenset())
+                    if s.done:
+                        break
+
+
+def frame_of(sim):
+    return round(sim.elapsed / DT)
+
+
+def predict_guards(sim, slots=HORIZON_SLOTS, cache=None):
     """プレイヤーを透明にして止めたまま、警備員の位置と向きを SAMPLE_FRAMES ごとに記録する。
-    (警備員の並びの列, 時刻の列, 閉まっている扉のマスの列) を返す。"""
-    s = sim.snapshot()
-    s.cloak_timer = 1e9  # 透明：見られず、触れても捕まらない（足音も出さない＝止まっている）
-    samples, times, doors = [], [], []
-    with timed_doors_as(sim.world, sim.world.timed_closed):
-        for _ in range(slots * SLOT_SAMPLES + 1):
-            samples.append([(g.x, g.y, g.heading) for g in s.guards])
-            times.append(s.elapsed)
-            doors.append(s.world.timed_closed)
-            for _ in range(SAMPLE_FRAMES):
-                s.step(frozenset())
-                if s.done:
-                    break
-    return samples, times, doors
+    (警備員の並びの列, 時刻の列, 閉まっている扉のマスの列) を返す。cache（Prediction）があれば使い回す。"""
+    cache = cache or Prediction()
+    if cache.can_reuse(sim):
+        cache.drop_until(sim)
+    else:
+        cache.start(sim)
+    count = slots * SLOT_SAMPLES + 1
+    cache.extend(count, sim.world)
+    return cache.samples[:count], cache.times[:count], cache.doors[:count]
 
 
 # 計算を速くするための覚え書き。どれも「同じ入力なら同じ結果」になるものだけを覚えるので、結果は変わらない。
@@ -77,7 +139,7 @@ def predict_guards(sim, slots=HORIZON_SLOTS):
 _FLOOR_NEAR = {}
 _SEEN_MEMO = OrderedDict()
 _HEARD_MEMO = OrderedDict()
-MEMO_LIMIT = 6000  # 覚えておく数の上限（多すぎるとメモリを使いすぎるので、古いものから捨てる）
+MEMO_LIMIT = 30000  # 覚えておく数の上限。12秒×鬼20人ぶん（約7000）を数回分まとめて覚えられる数。多すぎるとメモリを使いすぎる
 
 
 def floor_near(world, gx, gy, radius):
@@ -104,8 +166,14 @@ def _remember(memo, key, value):
     return value
 
 
+def snap(value, step):
+    return round(value / step) * step
+
+
 def guard_seen(world, gx, gy, heading, cfg):
-    """警備員1人から見えるマス：(忍び足で見つかるマス, 走っていると見つかるマス)。"""
+    """警備員1人から見えるマス：(忍び足で見つかるマス, 走っていると見つかるマス)。超越では位置と向きを丸めて計算する。"""
+    if is_tuned(cfg):
+        gx, gy, heading = snap(gx, POS_STEP), snap(gy, POS_STEP), snap(heading, HEADING_STEP)
     key = (gx, gy, heading, world.doors_closed, world.timed_closed)
     hit = _SEEN_MEMO.get(key)
     if hit is not None:
@@ -133,7 +201,9 @@ def guard_seen(world, gx, gy, heading, cfg):
 
 
 def guard_heard(world, gx, gy, cfg):
-    """警備員1人に、走ると足音を聞かれるマス（壁越しは届く距離が縮む）。"""
+    """警備員1人に、走ると足音を聞かれるマス（壁越しは届く距離が縮む）。超越では位置を丸めて計算する。"""
+    if is_tuned(cfg):
+        gx, gy = snap(gx, POS_STEP), snap(gy, POS_STEP)
     key = (gx, gy, world.doors_closed, world.timed_closed)
     hit = _HEARD_MEMO.get(key)
     if hit is not None:
@@ -218,9 +288,9 @@ def sample_seen(sim, guards, t, closed, px, py):
     return sneak, run
 
 
-def danger_schedule(sim, slots=HORIZON_SLOTS):
+def danger_schedule(sim, slots=HORIZON_SLOTS, cache=None):
     """区切りごとの (忍び足で危ないマス, 走ると危ないマス)。その区切りの間に一度でも危ないマスを全部含む。"""
-    samples, times, doors = predict_guards(sim, slots)
+    samples, times, doors = predict_guards(sim, slots, cache)
     px, py = sim.player.x, sim.player.y
     world, cfg = sim.world, sim.difficulty
     seen = [sample_seen(sim, guards, t, closed, px, py) for guards, t, closed in zip(samples, times, doors)]

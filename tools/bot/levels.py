@@ -12,6 +12,9 @@ from stealth_game.difficulty import DIFFICULTIES
 
 LEVEL_ENV = "BOT_LEVEL"
 LEVELS = ("hell", "transcend")  # ボットで試せる難易度
+# 超越用の改造（予測の使い回し・視界の計算の丸め・何度も見つかる場所を避ける）を使う難易度。
+# 地獄では使わない（地獄は、51.13秒の記録を出したときの動き方のまま）。仕様が違い、地獄では裏目に出たため
+TUNED_LEVELS = ("transcend",)
 RESULTS_ROOT = Path(__file__).resolve().parents[2] / "bot_results"  # プロジェクトのフォルダ直下
 
 
@@ -28,6 +31,11 @@ def set_level(key):
 def level_cfg(key=None):
     key = key or level_key()
     return next(cfg for cfg in DIFFICULTIES if cfg.key == key)
+
+
+def is_tuned(cfg):
+    """その難易度で、超越用の改造を使うか。"""
+    return cfg.key in TUNED_LEVELS
 
 
 def results_for(base=RESULTS_ROOT, key=None):

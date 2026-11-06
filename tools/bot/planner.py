@@ -23,9 +23,12 @@ from stealth_game.grid import manhattan, world_to_cell
 from stealth_game.guard import Guard
 from stealth_game.layout import EXIT_CELL
 
+from .levels import is_tuned
 from .options import enabled
 from .sim import DT
-from .spacetime import RUN, SAMPLE_FRAMES, SLOT_SAMPLES, SNEAK, danger_schedule, plan_path, timed_doors_as
+from .spacetime import (
+    RUN, SAMPLE_FRAMES, SLOT_SAMPLES, SNEAK, Prediction, danger_schedule, plan_path, timed_doors_as,
+)
 
 SEGMENT_FRAMES = 12  # 1区切りのコマ数（0.4秒）。この間は同じ動きを続ける
 DEPTH = 6  # 何区切り先まで試すか（2.4秒）
@@ -49,6 +52,13 @@ FUTURE_CHECK_SLOTS = 8  # 実行した後も、この区切り数（4秒）は�
 SLOT_FRAMES = SAMPLE_FRAMES * SLOT_SAMPLES
 SMOOTH_AHEAD = 2 if enabled("S2") else 1  # 滑らかに動くとき、経路の何区切り先のマスまで近道してよいか（2は斜めの近道が増えるが、予定とずれやすい）
 VALID_ALERT = 0.5  # 確かめるとき、警戒度がこれを超えたら実行しない
+# 超越だけ：何度も見つかる場所を避ける（巻き戻しをくり返さないように）。直近 HOT_RECENT 回の失敗のうち、
+# 2マス以内で HOT_COUNT 回以上見つかった場所の周り HOT_RADIUS マスには、時間と場所の経路で入らない。
+# ただし、今いる場所の近く（HOT_FREE 歩以内）・残りのアイテムと出口のすぐそばは避けない（行けなくなるので）
+HOT_RECENT = 8
+HOT_COUNT = 2
+HOT_RADIUS = 1
+HOT_FREE = 2
 
 # 点数の重み
 SPOTTED_PENALTY = 80.0  # 見つかった（追跡が始まった）
@@ -213,6 +223,8 @@ class Bot:
         self.checkpoints = []
         self.failures = []  # 巻き戻す前に見つかった（捕まった）マス（危険度の地図に使う）
         self.rewinds = 0
+        self.tuned = is_tuned(sim.difficulty)  # 超越用の改造を使うか（地獄では使わない）
+        self.prediction = Prediction() if self.tuned else None  # 前回の予測（超越だけ使い回す）
 
     # --- 経路 -----------------------------------------------------------
     def field(self, target):
@@ -275,6 +287,25 @@ class Bot:
         self.order.remove(first)
         self.order.insert(self.order.index(second) + 1, first)
         self.progress = (None, math.inf, self.sim.elapsed)
+
+    def avoid_cells(self):
+        """何度も見つかっている場所の周り（巻き戻した後、同じ失敗をくり返さないように避ける）。"""
+        if not self.tuned:
+            return frozenset()
+        recent = self.failures[-HOT_RECENT:]
+        hot = [f for f in recent if sum(1 for g in recent if manhattan(f, g) <= 2) >= HOT_COUNT]
+        if not hot:
+            return frozenset()
+        here = world_to_cell(self.sim.player.x, self.sim.player.y)
+        keep = [self.sim.item_cells[i] for i in self.remaining()] + [EXIT_CELL]
+        cells = set()
+        for fx, fy in hot:
+            for dx in range(-HOT_RADIUS, HOT_RADIUS + 1):
+                for dy in range(-HOT_RADIUS, HOT_RADIUS + 1):
+                    if abs(dx) + abs(dy) <= HOT_RADIUS:
+                        cells.add((fx + dx, fy + dy))
+        return frozenset(c for c in cells
+                         if manhattan(c, here) > HOT_FREE and all(manhattan(c, k) > 1 for k in keep))
 
     def keep_out_cells(self, item_cell):
         """競走を始めるまで入らないマス（最後のアイテムの周り）。"""
@@ -376,7 +407,7 @@ class Bot:
         1秒ぶんでだめなら、0.5秒ぶんで同じことを確かめる。
         """
         here = world_to_cell(self.sim.player.x, self.sim.player.y)
-        path = plan_path(self.world, here, danger_schedule(self.sim), field, forbidden, floor_value)
+        path = plan_path(self.world, here, danger_schedule(self.sim, cache=self.prediction), field, forbidden, floor_value)
         if not path:
             return None
         # まずは滑らかな動き方（止まらずに進み、斜めに近道する）で試し、だめなら経路どおりの動き方で試す
@@ -389,7 +420,7 @@ class Bot:
                 if after.done:
                     return keys_log
                 after_here = world_to_cell(after.player.x, after.player.y)
-                future = plan_path(self.world, after_here, danger_schedule(after, FUTURE_CHECK_SLOTS),
+                future = plan_path(self.world, after_here, danger_schedule(after, FUTURE_CHECK_SLOTS, self.prediction),
                                    field, forbidden, floor_value)
                 if future and len(future) >= FUTURE_CHECK_SLOTS:
                     return keys_log
@@ -475,6 +506,7 @@ class Bot:
                 self.race_keys = race
                 return None
         forbidden = self.keep_out_cells(target_cell) if last else frozenset()
+        forbidden |= self.avoid_cells()
         if self.hold_slots > 0:  # 巻き戻した直後は、見つからなければ少しその場で待つ
             self.hold_slots -= 1
             here = world_to_cell(self.sim.player.x, self.sim.player.y)
@@ -484,7 +516,7 @@ class Bot:
         if last:
             keys = self.spacetime_keys(field, forbidden=forbidden, floor_value=LAST_ITEM_WAIT_DISTANCE)
         else:
-            keys = self.spacetime_keys(field)
+            keys = self.spacetime_keys(field, forbidden=forbidden)
         if keys:
             self.stats["spacetime"] += 1
             return keys
