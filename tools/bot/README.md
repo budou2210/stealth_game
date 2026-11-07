@@ -155,6 +155,48 @@ uv run python -m tools.bot.play_record bot_results/transcend/wins/seed_<種>.jso
 
 同じ16配置・上限20分で比べると、超越のクリアは 0 → 2 配置に増えました（2026-11-06）。
 
+## 記録を探す（PowerShell）
+
+結果のファイルから、速い記録などを探すコマンドです。どれも **PowerShell** で、プロジェクトのフォルダで実行します
+（コマンドプロンプトのときは、先に `powershell` と打ってから入力します）。
+例は地獄（`bot_results\hell`）です。超越を見るときは、`hell` を `transcend` に変えます。
+
+### いちばん速い記録（今の最速。再生できる記録と同じタイム）
+
+```
+Get-ChildItem bot_results\hell\wins\seed_*.json -Exclude *.orig.json | ForEach-Object { $j = Get-Content $_ | ConvertFrom-Json; [pscustomobject]@{seed=$j.seed; time=$j.time; refined=$j.refined} } | Sort-Object time | Select-Object -First 10
+```
+
+`refined` に数字があれば、refine で縮めた記録です（数字は何回目に縮んだか）。
+
+### 挑戦の結果（attempts.jsonl）から探す
+
+`attempts.jsonl` には、run の挑戦が1回ずつ全部残っています（遅い回も残ります。refine の結果は入りません）。
+
+| 見たいもの | コマンド |
+|---|---|
+| クリアを速い順に10件 | `Get-Content bot_results\hell\attempts.jsonl \| ConvertFrom-Json \| Where-Object outcome -eq "win" \| Sort-Object time \| Select-Object -First 10 seed,time,rewinds` |
+| 結果ごとの数（win・lose・stuck・time_limit） | `Get-Content bot_results\hell\attempts.jsonl \| ConvertFrom-Json \| Group-Object outcome \| Select-Object Name,Count` |
+| 1つの種の挑戦を全部（例：1329） | `Get-Content bot_results\hell\attempts.jsonl \| ConvertFrom-Json \| Where-Object seed -eq 1329 \| Select-Object seed,outcome,time,items,rewinds,variant` |
+| 最近の挑戦10件 | `Get-Content bot_results\hell\attempts.jsonl -Tail 10 \| ConvertFrom-Json \| Select-Object seed,outcome,time,items,rewinds` |
+
+（README をメモ帳などでそのまま開いた場合、表の中のコマンドは `\|` と書いてありますが、実際には `|` と打ちます。GitHub で見ると `|` と表示されます）
+
+### その他
+
+| 見たいもの | コマンド |
+|---|---|
+| refine で縮めた記録だけ | `Get-ChildItem bot_results\hell\wins\seed_*.json -Exclude *.orig.json \| ForEach-Object { Get-Content $_ \| ConvertFrom-Json } \| Where-Object refined \| Sort-Object time \| Select-Object seed,time,refined` |
+| クリアの記録の数 | `(Get-ChildItem bot_results\hell\wins\seed_*.json -Exclude *.orig.json).Count` |
+
+### 並べ方・件数の変え方
+
+| 変えたいこと | 変えるところ |
+|---|---|
+| 遅い順にする | `Sort-Object time` を `Sort-Object time -Descending` にする |
+| 件数を変える | `-First 10` の数字を変える（全部表示するなら `-First 10` を消す） |
+| 表示する項目を変える | `Select-Object` の後ろの名前を変える（`seed` `outcome` `time` `items` `rewinds` `variant` `layout_score` `compute_seconds` など） |
+
 ## 結果のファイル
 
 `bot_results/<難易度>/`（地獄は `hell`、超越は `transcend`）に保存します（GitHub には上げません）。
