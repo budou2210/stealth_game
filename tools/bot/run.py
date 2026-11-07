@@ -5,6 +5,7 @@
     uv run python -m tools.bot.run --attempts 40 --workers 4   （同時に走らせる数を4にする。最初は8つ同時）
     uv run python -m tools.bot.run --attempts 8 --max-minutes 30   （1回の計算時間の上限を30分にする。最初は15分）
     uv run python -m tools.bot.run --attempts 8 --variants 3   （同じ配置を、動きを少し変えてさらに3通り試し、一番速いクリアを残す）
+    uv run python -m tools.bot.run --attempts 20 --fast   （速さを詰める動きで試す。結果は bot_results/hell_fast/）
 
 結果は bot_results/<難易度>/ に保存する（GitHub には上げない）。
 - attempts.jsonl: 挑戦ごとの結果（1行に1回）
@@ -25,7 +26,8 @@ from pathlib import Path
 from stealth_game.world import World
 
 from .danger import DangerMap, choose_seed
-from .levels import LEVELS, level_key, results_for, set_level
+from .levels import LEVELS, danger_source, level_key, results_for, set_level
+from .options import is_fast, set_fast
 from .sim import DT
 from .worker import attempt
 
@@ -61,6 +63,8 @@ def main():
     parser.add_argument("--level", choices=LEVELS, default="hell",
                         help="遊ぶ難易度（transcend＝超越）。結果は難易度ごとに別のフォルダに残す")
     parser.add_argument("--workers", type=int, default=8, help="同時に走らせる挑戦の数（最初は8。PCのコア数まで）")
+    parser.add_argument("--fast", action="store_true",
+                        help="速さを詰める動き（options.py の FAST_OPTIONS）で動かす。結果は <難易度>_fast のフォルダに分ける")
     parser.add_argument("--seed", type=int, help="この種だけを試す（選び分けをしない）")
     parser.add_argument("--results", type=Path, default=None, help="結果を保存するフォルダ（省くと難易度ごとの標準の場所）")
     parser.add_argument("--max-minutes", type=float, default=15.0, help="1回の挑戦の計算時間の上限（分）。超えたら打ち切る")
@@ -69,11 +73,12 @@ def main():
     args = parser.parse_args()
 
     set_level(args.level)
+    set_fast(args.fast)  # 同時に走らせるプロセスにも、環境変数で伝わる
     world = World()
     results = args.results or results_for()
     danger_path = results / "danger.json"
     attempts_path = results / "attempts.jsonl"
-    danger_map = DangerMap.load(danger_path)
+    danger_map = DangerMap.load(danger_source(results))
     tried = tried_seeds(attempts_path)
     rng = random.Random()
     results.mkdir(parents=True, exist_ok=True)
@@ -86,7 +91,9 @@ def main():
             tried.add(seed)
         return seed
 
-    jobs_per_seed = 1 + max(0, args.variants)
+    # --fast では、どの動きも「順番を全部比べる（F1）・近い順」の両方で試す
+    orders = (True, False) if is_fast() else (None,)
+    jobs_per_seed = (1 + max(0, args.variants)) * len(orders)
     total = args.attempts * jobs_per_seed  # 挑戦の数（1つの配置につき 1+variants 回）
     queue = []  # まだ始めていない (種, 動きの番号)
     started = finished = 0
@@ -101,9 +108,9 @@ def main():
                         print("試していない種がなくなりました")
                         total = started
                         break
-                    queue = [(seed, v) for v in range(jobs_per_seed)]
-                seed, variant = queue.pop(0)
-                running[pool.submit(attempt, seed, danger_map, args.max_minutes * 60, variant)] = seed
+                    queue = [(seed, v, o) for v in range(1 + max(0, args.variants)) for o in orders]
+                seed, variant, order = queue.pop(0)
+                running[pool.submit(attempt, seed, danger_map, args.max_minutes * 60, variant, order)] = seed
                 started += 1
             if not running:
                 break
@@ -123,7 +130,9 @@ def main():
                     continue
                 best = save_result(results, result, visited, keys, danger_map, danger_path, attempts_path)
                 finished += 1
-                variant = f"（動き{result['variant']}）" if jobs_per_seed > 1 else ""
+                variant = f"（動き{result['variant']}）" if args.variants else ""
+                if "best_order" in result:
+                    variant += "（順番：全部比べる）" if result["best_order"] else "（順番：近い順）"
                 print(
                     f"[{finished}/{total}] 種 {result['seed']}{variant}: {result['outcome']}{'（この種の最速）' if best else ''}  アイテム {result['items']}/8（最高 {result['best_items']}）  巻き戻し {result['rewinds']}回  "
                     f"ゲーム内 {result['time']}秒  計算 {result['compute_seconds']}秒  配置の点数 {result['layout_score']}",

@@ -33,8 +33,8 @@ from .spacetime import (
 SEGMENT_FRAMES = 12  # 1区切りのコマ数（0.4秒）。この間は同じ動きを続ける
 DEPTH = 6  # 何区切り先まで試すか（2.4秒）
 BEAM = 4  # 区切りごとに残す流れの数
-RUN_CLEARANCE = 1.0  # 足音の届く距離＋これ以内に警備員がいるときは走らない
-DANGER_WEIGHT = 6.0  # 経路で、危険度の高いマスをどれだけ避けるか
+RUN_CLEARANCE = 0.0 if enabled("F3") else 1.0  # 足音の届く距離＋これ以内に警備員がいるときは走らない
+DANGER_WEIGHT = 3.0 if enabled("F9") else 6.0  # 経路で、危険度の高いマスをどれだけ避けるか
 STAGING_DISTANCE = 2.5  # 最後のアイテムの手前で待つ距離（予備の探索方法で使う。距離の地図の値）
 LAST_ITEM_WAIT_DISTANCE = 6.0  # 最後のアイテムに、これより近づいて待たない（紫が集まってくるので）
 LAST_ITEM_KEEP_OUT = 2  # 最後のアイテムから、この歩数以内のマスには、競走を始めるまで入らない
@@ -59,6 +59,7 @@ HOT_RECENT = 8
 HOT_COUNT = 2
 HOT_RADIUS = 1
 HOT_FREE = 2
+ALTERNATE_PATHS = 2 if enabled("F8") else 0  # 確かめで経路がだめだったとき、別の経路を探し直す回数
 
 # 点数の重み
 SPOTTED_PENALTY = 80.0  # 見つかった（追跡が始まった）
@@ -200,9 +201,12 @@ class Node:
 
 
 class Bot:
-    def __init__(self, sim, danger_map, variant=0):
+    def __init__(self, sim, danger_map, variant=0, best_order=None):
         """variant: 0 なら標準の動き。1以上なら、経路の重みやアイテムの順番を少しだけ変えた動きにする
-        （同じ配置を何通りも試して、一番速いクリアを残すため）。"""
+        （同じ配置を何通りも試して、一番速いクリアを残すため）。
+        best_order: True なら、アイテムの順番を全部の順番を比べて決める（F1）。None なら F1 のスイッチに従う。
+        --fast では、同じ配置を True と False の両方で試して、速いほうを残す（配置によって、どちらが速いかが違うため）。"""
+        self.use_best_order = enabled("F1") if best_order is None else best_order
         self.sim = sim
         self.danger_map = danger_map
         self.world = sim.world
@@ -238,8 +242,15 @@ class Bot:
         items = list(range(len(self.sim.item_cells)))
         exit_field = self.field(EXIT_CELL)
         last = min(items, key=lambda i: exit_field.dist.get(self.sim.item_cells[i], math.inf))
-        rest = [i for i in items if i != last]
-        order = []
+        uncollected = [i for i in items if i not in self.sim.items_collected]  # refine で途中から始めるとき用
+        if self.use_best_order and uncollected:
+            best = self.best_order(uncollected)
+            last, rest = best[-1], best[:-1]
+            order = list(rest)
+            rest = []
+        else:
+            rest = [i for i in items if i != last]
+            order = []
         here = world_to_cell(self.sim.player.x, self.sim.player.y)
         while rest:
             nxt = min(rest, key=lambda i: self.field(self.sim.item_cells[i]).dist.get(here, math.inf))
@@ -253,6 +264,38 @@ class Bot:
                 if self.rng.random() < 0.25:
                     order[k], order[k + 1] = order[k + 1], order[k]
         return order + [last]
+
+    def best_order(self, items):
+        """スタート → 全部のアイテム → 出口 の道のり（危険度の重みつき）が一番短い順番（最後のアイテムも含めて選ぶ）。
+
+        8個の並べ方を全部比べる代わりに、「どのアイテムを取ったか・今どこにいるか」ごとに一番短い道のりを覚えて
+        積み上げる（動的計画法）。
+        """
+        n = len(items)
+        cells = [self.sim.item_cells[i] for i in items]
+        start = world_to_cell(self.sim.player.x, self.sim.player.y)
+        to = [self.field(c).dist for c in cells]  # to[j][マス] = そのマスからアイテム j までの道のり
+        exit_dist = self.field(EXIT_CELL).dist
+        best = {(1 << j, j): (to[j].get(start, math.inf), None) for j in range(n)}
+        for mask in range(1, 1 << n):
+            for j in range(n):
+                here = best.get((mask, j))
+                if here is None:
+                    continue
+                for k in range(n):
+                    if mask >> k & 1:
+                        continue
+                    key = (mask | 1 << k, k)
+                    cost = here[0] + to[k].get(cells[j], math.inf)
+                    if key not in best or cost < best[key][0]:
+                        best[key] = (cost, j)
+        full = (1 << n) - 1
+        j = min(range(n), key=lambda j: best[(full, j)][0] + exit_dist.get(cells[j], math.inf))
+        path, mask = [], full
+        while j is not None:
+            path.append(items[j])
+            j, mask = best[(mask, j)][1], mask & ~(1 << j)
+        return path[::-1]
 
     def route_length(self, order, last):
         """スタート → order の順 → last → 出口 の道のり（危険度の重みつき）。"""
@@ -290,7 +333,7 @@ class Bot:
 
     def avoid_cells(self):
         """何度も見つかっている場所の周り（巻き戻した後、同じ失敗をくり返さないように避ける）。"""
-        if not self.tuned:
+        if not (self.tuned or enabled("F6")):
             return frozenset()
         recent = self.failures[-HOT_RECENT:]
         hot = [f for f in recent if sum(1 for g in recent if manhattan(f, g) <= 2) >= HOT_COUNT]
@@ -407,9 +450,23 @@ class Bot:
         1秒ぶんでだめなら、0.5秒ぶんで同じことを確かめる。
         """
         here = world_to_cell(self.sim.player.x, self.sim.player.y)
-        path = plan_path(self.world, here, danger_schedule(self.sim, cache=self.prediction), field, forbidden, floor_value)
-        if not path:
-            return None
+        schedule = danger_schedule(self.sim, cache=self.prediction)
+        tried = set()
+        for _ in range(1 + ALTERNATE_PATHS):  # だめなら、だめだった経路の最初の行き先を避けて探し直す（F8）
+            path = plan_path(self.world, here, schedule, field, forbidden | tried, floor_value)
+            if not path:
+                return None
+            keys = self.check_path(path, field, forbidden, floor_value)
+            if keys is not None:
+                return keys
+            step = next((cell for cell, _ in path if cell != here), None)
+            if step is None:
+                return None
+            tried.add(step)
+        return None
+
+    def check_path(self, path, field, forbidden, floor_value):
+        """経路の最初の数区切りを確かめる。よければ入力の列、だめなら None。"""
         # まずは滑らかな動き方（止まらずに進み、斜めに近道する）で試し、だめなら経路どおりの動き方で試す
         for smooth in (True, False):
             for slots in (EXECUTE_SLOTS, 1):

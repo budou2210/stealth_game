@@ -190,3 +190,16 @@ def test_heads_for_exit_when_all_items_were_taken_without_a_race():
     bot.sim.items_collected = set(range(len(bot.sim.item_cells)))
     keys = bot.decide()
     assert keys or bot.race_keys, "出口へ向かう入力がある"
+
+
+def test_best_order_is_never_longer_than_nearest_first():
+    """F1（順番を全部比べる）は、近い順より道のりが長くならず、全部のアイテムを1回ずつ回る。"""
+    from tools.bot.danger import DangerMap
+    from tools.bot.planner import Bot
+    from tools.bot.sim import Sim
+
+    for seed in (8, 410, 1329):
+        near = Bot(Sim(seed), DangerMap(), best_order=False)
+        best = Bot(Sim(seed), DangerMap(), best_order=True)
+        assert sorted(best.order) == list(range(len(best.sim.item_cells)))
+        assert best.route_length(best.order[:-1], best.order[-1]) <= near.route_length(near.order[:-1], near.order[-1]) + 1e-9

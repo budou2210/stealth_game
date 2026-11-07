@@ -32,10 +32,10 @@ if enabled("T"):  # 1区切りを14コマ（約0.47秒）にして、忍び足�
 HORIZON_SLOTS = 24  # 何区切り先まで探すか（12秒）
 # 余裕は小さめにして積極的に動く（倍の余裕と比べて、32配置でクリア 23→27、平均タイム約27%短縮）。
 # 実行前に本物どおりのシミュレーションで確かめるので、余裕が小さくても見つかる経路は使わない
-VIEW_MARGIN = 0.3  # 視界の距離の余裕（体の大きさと、ずれへの備え）
-ANGLE_MARGIN = math.radians(5)  # 視野角の余裕
+VIEW_MARGIN = 0.15 if enabled("F7") else 0.3  # 視界の距離の余裕（体の大きさと、ずれへの備え）
+ANGLE_MARGIN = math.radians(3 if enabled("F7") else 5)  # 視野角の余裕
 NEAR_MARGIN = 0.3  # すぐそばで気づかれる距離の余裕
-HEAR_MARGIN = 0.6  # 足音が届く距離の余裕
+HEAR_MARGIN = 0.3 if enabled("F3") else 0.6  # 足音が届く距離の余裕
 RELEVANT_DISTANCE = 26.0  # プレイヤーからこれより遠い警備員は、予定表に入れない（計算を減らす）
 # 超越だけ：視界・足音の計算を覚えておくとき、位置と向きをこの単位に丸める（歩いている警備員でも覚えた結果が
 # 使えるように）。丸めのずれ（位置は最大0.05、向きは最大1.5°）は、上の余裕（VIEW_MARGIN・ANGLE_MARGIN）の中に収まる
@@ -322,6 +322,16 @@ def moves_from(world, cell):
         two = (cx + 2 * dx, cy + 2 * dy)
         if not world.is_wall(*two):
             yield two, (one,), RUN
+    if enabled("F2"):  # 走るときの斜め（1,1）と桂馬（2,1）。角を削って通るので、途中のマスも空いていること
+        for dx in (1, -1):
+            for dy in (1, -1):
+                side_x, side_y, diag = (cx + dx, cy), (cx, cy + dy), (cx + dx, cy + dy)
+                if world.is_wall(*side_x) or world.is_wall(*side_y) or world.is_wall(*diag):
+                    continue
+                yield diag, (side_x, side_y), RUN
+                for far, beside in (((cx + 2 * dx, cy + dy), (cx + 2 * dx, cy)), ((cx + dx, cy + 2 * dy), (cx, cy + 2 * dy))):
+                    if not world.is_wall(*far):
+                        yield far, (side_x, side_y, diag), RUN
 
 
 def plan_path(world, start, schedule, field, forbidden=frozenset(), floor_value=0.0):
@@ -340,6 +350,7 @@ def plan_path(world, start, schedule, field, forbidden=frozenset(), floor_value=
 
 def _plan_path(world, start, schedule, value, forbidden):
     early = enabled("C") or enabled("V")
+    prefer = RUN if enabled("F3") else SNEAK  # 同じくらい近づけるときに選ぶ歩き方
     layer = {start: value(start)}
     reached = {start: 0}  # {マス: 経路の中で、一番近づいた距離に初めて届いた区切り}（C のとき使う）
     parents = []
@@ -359,7 +370,7 @@ def _plan_path(world, start, schedule, value, forbidden):
                 v = min(along, value(n))
                 r = k if value(n) < along else reached[cell]
                 if n not in nxt or v < best_along[n] or (
-                        v == best_along[n] and ((early and r < best_reached[n]) or (not early and mode == SNEAK))):
+                        v == best_along[n] and ((early and r < best_reached[n]) or (not early and mode == prefer))):
                     nxt[n] = (cell, mode)
                     best_along[n] = v
                     best_reached[n] = r
@@ -372,7 +383,7 @@ def _plan_path(world, start, schedule, value, forbidden):
         return None
     # 一番先の区切りまで見つからずにいられる経路のうち、途中で目標に一番近づけるもの。
     # 最後までもつ経路がなければ、一番長く逃げ切れる経路の中から選ぶことになる
-    if early:
+    if early or enabled("F4"):  # F4：目標に一番近づける経路のうち、一番早く届くもの
         final = min(layer, key=lambda c: (layer[c], reached[c], value(c)))
     else:
         final = min(layer, key=lambda c: (layer[c], value(c)))

@@ -23,11 +23,14 @@ from stealth_game.world import World
 
 from .danger import DangerMap
 from .planner import Bot, decode_keys, encode_keys
-from .levels import LEVELS, level_key, results_for, set_level
+from .levels import LEVELS, danger_source, level_key, results_for, set_level
+from .options import enabled, is_fast, set_fast
 from .sim import DT, Sim
 
 CUT_STEP = 5.0  # 戻る時点の間隔（秒）
 CUTS = 8  # 戻る時点の数（終わりから CUT_STEP×CUTS 秒前まで）
+FINE_CUT_STEP = 2.5  # F5：戻る時点を細かくするときの間隔（終わりから FINE_CUT_STEP×FINE_CUTS 秒前まで）
+FINE_CUTS = 16
 MAX_COMPUTE_SECONDS = 300  # 1回のやり直しの計算時間の上限
 
 _world = None
@@ -47,17 +50,41 @@ def replay_keys(seed, keys):
 
 
 def retry_from(seed, encoded, cut_frame, variant, danger_map):
-    """記録を cut_frame コマ目まで再生し、そこからボットに続きをやらせる。(結果, 最初からの入力の記録)。"""
+    """記録を cut_frame コマ目まで再生し、そこからボットに続きをやらせる。(結果, 最初からの入力の記録)。
+    --fast のときは、動きの番号が偶数なら順番を全部比べ（F1）、奇数なら近い順にする。"""
     keys = decode_keys(encoded)[:cut_frame]
     sim = replay_keys(seed, keys)
     if sim.done:
         return None
-    bot = Bot(sim, danger_map, variant)
+    bot = Bot(sim, danger_map, variant, (variant % 2 == 0) if is_fast() else None)
     bot.last_collect_time = sim.elapsed
     result = bot.play(max_compute_seconds=MAX_COMPUTE_SECONDS)
     result["cut_time"] = round(cut_frame * DT, 2)
     result["variant"] = variant
     return result, encode_keys(keys + bot.log)
+
+
+def cut_points(seed, encoded):
+    """やり直す時点（コマ数）の一覧。"""
+    frames = len(decode_keys(encoded))
+    if not enabled("F5"):
+        cuts = [frames - round(k * CUT_STEP / DT) for k in range(1, CUTS + 1)]
+        return [c for c in cuts if c > 0]
+    cuts = {frames - round(k * FINE_CUT_STEP / DT) for k in range(1, FINE_CUTS + 1)}
+    # アイテムを拾った直後からもやり直す（区間ごとに、次のアイテムへの行き方を変えてみる）
+    global _world
+    if _world is None:
+        _world = World()
+    sim = Sim(seed, world=_world)
+    count = 0
+    for frame, k in enumerate(decode_keys(encoded)):
+        sim.step(k)
+        if len(sim.items_collected) > count:
+            count = len(sim.items_collected)
+            cuts.add(frame + 1)
+        if sim.done:
+            break
+    return sorted(c for c in cuts if 0 < c < frames)
 
 
 def guarded(*args):
@@ -75,19 +102,20 @@ def main():
     parser.add_argument("--workers", type=int, default=8, help="同時に走らせる数")
     parser.add_argument("--level", choices=LEVELS, default="hell", help="記録の難易度（transcend＝超越）")
     parser.add_argument("--results", type=Path, default=None, help="結果のフォルダ（省くと難易度ごとの標準の場所）")
+    parser.add_argument("--fast", action="store_true",
+                        help="速さを詰める動きで続きをやらせる（結果も <難易度>_fast のフォルダを読む・書く）")
     args = parser.parse_args()
     set_level(args.level)
+    set_fast(args.fast)
     args.results = args.results or results_for()
 
     path = args.results / "wins" / f"seed_{args.seed}.json"
     record = json.loads(path.read_text(encoding="utf-8"))
-    danger_map = DangerMap.load(args.results / "danger.json")
+    danger_map = DangerMap.load(danger_source(args.results))
     started = time.perf_counter()
     print(f"種 {args.seed}: 今の記録 {record['time']}秒", flush=True)
     for round_no in range(1, args.rounds + 1):
-        frames = len(decode_keys(record["keys"]))
-        cut_frames = [frames - round(k * CUT_STEP / DT) for k in range(1, CUTS + 1)]
-        cut_frames = [c for c in cut_frames if c > 0]
+        cut_frames = cut_points(args.seed, record["keys"])
         best = None
         with ProcessPoolExecutor(max_workers=args.workers) as pool:
             futures = [pool.submit(guarded, args.seed, record["keys"], c, v, danger_map)
