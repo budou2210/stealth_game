@@ -152,6 +152,32 @@ def test_replay_pause_keeps_record_in_sync(game_class):
     assert snapshot_of(paused) == snapshot_of(straight)
 
 
+def test_replay_pressing_p_keeps_record_in_sync(game_class):
+    """P キーで止めて再開しても、記録どおりに進む（キーを押したコマで、記録の入力を飛ばしたり余分に進んだりしない）。"""
+    straight = new_replay(game_class, make_record(8, 200))
+    for _ in range(160):
+        straight.advance()
+
+    paused = new_replay(game_class, make_record(8, 200))
+    real = paused.is_down
+    paused.p_down = False
+    paused.is_down = lambda name: (name == "pause" and paused.p_down) or real(name)
+    for _ in range(80):
+        paused.advance()
+    for _ in range(2):  # 止める・再開する
+        paused.p_down = True
+        paused.advance()
+        paused.p_down = False
+        for _ in range(40):
+            paused.advance()
+        if paused.state == "paused":
+            frame = paused.frame
+    assert frame == 80, "止めたコマでは、記録の入力を使わない"
+    for _ in range(40):
+        paused.advance()
+    assert snapshot_of(paused) == snapshot_of(straight)
+
+
 def test_rewind_keeps_only_the_successful_branch():
     """巻き戻した後の記録を最初から再生すると、ボットの今の状態とぴったり一致する（失敗した流れが混ざらない）。"""
     from tools.bot.danger import DangerMap

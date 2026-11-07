@@ -68,6 +68,8 @@ class InputMixin:
             self.toggle_noise_range()
         if presses["pause"]:
             self.toggle_pause()
+            if self.state in ("play", "paused"):
+                return frozenset()  # P を押したコマはゲームを進めないので、お助けアイテムなども使わない（リプレイと合わなくなる）
         if self.state == "title":
             if presses["confirm"]:
                 self.leave_title()

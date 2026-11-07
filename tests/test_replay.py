@@ -185,3 +185,46 @@ def test_menu_stops_replay(game_class):
     game = replay_game(game_class, as_replay(original))
     game.open_menu()  # M
     assert game.replay is None
+
+
+def hold_p(game):
+    """P キーだけを本物のキーボードで押せるようにする（game.p_down が True の間、押している）。"""
+    real = game.is_down
+    game.p_down = False
+    game.is_down = lambda name: (name == "pause" and game.p_down) or real(name)
+
+
+def test_pressing_p_during_replay_does_not_change_the_result(game_class):
+    """P キーで止めて再開しても、記録どおりに進む（キーを押したコマで、ゲームが余分に進んだり記録を飛ばしたりしない）。"""
+    original = recorded_game(game_class, cfg=HARD)
+    expected = snapshot(original)
+    game = replay_game(game_class, as_replay(original))
+    hold_p(game)
+    for _ in range(50):
+        game.replay_tick(0.03)
+    for _ in range(2):  # 止める・再開する
+        game.p_down = True
+        game.replay_tick(0.03)
+        game.p_down = False
+        for _ in range(20):
+            game.replay_tick(0.03)
+    play_to_end(game)
+    assert snapshot(game)[1:] == expected[1:]
+
+
+def test_pausing_with_p_while_playing_keeps_the_recording_right(game_class):
+    """遊んでいる途中に P で止めて再開しても、残った記録を再生すると同じ結果になる。"""
+    random.seed(7)
+    original = light(game_class())
+    original.down = set()
+    original.is_down = lambda name: name in original.down
+    original.start_game(HARD)
+    for i in range(400):
+        original.down = set(PATTERN[i % len(PATTERN)])
+        if i in (100, 130):
+            original.down.add("pause")
+        original.step(DTS[i % len(DTS)])
+    expected = snapshot(original)
+    game = replay_game(game_class, as_replay(original))
+    play_to_end(game)
+    assert snapshot(game)[1:] == expected[1:]

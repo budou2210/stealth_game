@@ -101,13 +101,15 @@ class Replay(StealthGame):
 
     # --- 毎フレーム -----------------------------------------------------
     def advance(self):
-        """1コマ進める。プレイ中だけ記録の入力を1つ使う（一時停止中は入力も止まる）。"""
+        """1コマ進める。ゲームが進んだコマだけ記録の入力を1つ使う（一時停止中や、P を押したコマは使わない）。"""
         if self.state == "play" and self.frame < len(self.recorded_keys):
             self.current = self.recorded_keys[self.frame]
-            self.frame += 1
         else:
             self.current = frozenset()
+        before = self.state
         self.step(DT)
+        if before == "play" and self.last_step_played and self.frame < len(self.recorded_keys):
+            self.frame += 1
         if self.state == "play" and self.frame >= len(self.recorded_keys) and not self.finished_shown:
             self.finished_shown = True  # 記録が途中で終わっている（行き詰まりであきらめた回など）
             self.message_text.setText(self.replay_text["finished"])

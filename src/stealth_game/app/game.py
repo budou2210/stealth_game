@@ -406,14 +406,20 @@ class StealthGame(
             self.message_text.setText("")
 
     def step(self, dt):
-        """1フレーム分の処理。一時停止中は時間・警備員・アイテムの回転などを全部止める。"""
+        """1フレーム分の処理。一時停止中は時間・警備員・アイテムの回転などを全部止める。
+
+        P を押したコマ（止めたコマも、再開したコマも）は、ゲームを進めない。こうしないと、止めたコマでは
+        読んだ入力を使わずに捨て、再開したコマでは記録にない1コマが入って、リプレイの動きがずれる。
+        """
+        before = self.state
         presses = self.poll_action_keys()
-        self.last_step_played = self.state in ("play", "caught")
+        paused_or_resumed = {before, self.state} == {"play", "paused"}
+        self.last_step_played = self.state in ("play", "caught") and not paused_or_resumed
         if self.last_step_played:
             self.record_frame(dt, presses)  # リプレイ用に、このコマの時間の長さと入力を残す
         if self.state == "title":
             self.update_title(dt)
-        elif self.state == "play":
+        elif self.state == "play" and not paused_or_resumed:
             self.update_play(dt)
         elif self.state == "caught":
             self.update_caught(dt)
