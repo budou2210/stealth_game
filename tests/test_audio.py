@@ -168,7 +168,7 @@ def test_win_jingles_and_new_record_screen(game_class):
     assert not game.bgm_playing, "クリアしたらBGMを止める"
     run_scheduled(game)
     assert played(game, "new_record") == 1
-    assert game.message_text.setText.call_args.args[0] == game.text["new_record"], "新記録の文字はジングルと同時"
+    assert game.message_text.setText.call_args.args[0] == game.text["new_record"] + game.win_replay_hint(), "新記録の文字はジングルと同時"
 
 
 def test_game_over_screen_follows_jingle(game_class):

@@ -97,7 +97,7 @@ def test_best_time_is_saved_and_shown(game_class):
 
     game.start_game(HARD)
     message = win(game, 250.0)
-    assert message == game.text["win_done"].format(time=250.0), "新記録でないときは、タイムと操作だけ"
+    assert message == game.text["win_done"].format(time=250.0) + game.win_replay_hint(), "新記録でないときは、タイムと操作と V の案内だけ"
     assert load_records(records_path()) == {"hard": 200.0}, "遅いタイムでは書き換えない"
 
     game.start_game(HARD)

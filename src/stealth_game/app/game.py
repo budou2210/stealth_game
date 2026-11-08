@@ -396,8 +396,8 @@ class StealthGame(
             self.message_text.setText(self.text["win_done"].format(time=self.elapsed) + self.win_replay_hint())
 
     def win_replay_hint(self):
-        """タイムアタックのクリア画面だけ：今のプレイをゴーストと一緒に見る V の案内。"""
-        return "\n" + self.text["ghost_replay_hint"] if self.difficulty.time_attack else ""
+        """クリア画面の、今のプレイを再生する V の案内（タイムアタックはゴーストつき）。"""
+        return "\n" + self.text["ghost_replay_hint" if self.difficulty.time_attack else "this_run_replay_hint"]
 
     def show_new_record(self):
         self.play_sound("new_record")

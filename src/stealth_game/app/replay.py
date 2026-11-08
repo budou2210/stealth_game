@@ -72,8 +72,8 @@ class ReplayMixin:
 
     def play_best_replay(self):
         """メニューの V：選んでいる難易度のベスト記録を再生する。
-        タイムアタックのクリア画面の V：今のプレイを再生する（ボットのゴーストつき）。"""
-        if self.state == "win" and self.difficulty.time_attack:
+        クリア画面の V：今のプレイを再生する（タイムアタックはボットのゴーストつき）。"""
+        if self.state == "win":
             self.play_this_run()
             return
         if self.state != "menu":

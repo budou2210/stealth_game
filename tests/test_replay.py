@@ -228,3 +228,20 @@ def test_pausing_with_p_while_playing_keeps_the_recording_right(game_class):
     game = replay_game(game_class, as_replay(original))
     play_to_end(game)
     assert snapshot(game)[1:] == expected[1:]
+
+
+def test_clear_screen_v_replays_this_run_on_any_difficulty(game_class):
+    """どの難易度でも、クリア画面の V で今のプレイを最初から再生し、記録したときと同じ展開になる（ゴーストはない）。"""
+    game = recorded_game(game_class, NORMAL, frames=300)
+    expected = snapshot(game)
+    dts = list(game.recording["dts"])
+    game.state = "win"  # この配置でクリアまで遊ぶのは長いので、クリア画面にしてから V を押す
+    del game.is_down  # 再生のときは、本物の is_down（記録のキーを返す）に戻す
+    game.mouseWatcherNode.isButtonDown.return_value = False
+    game.play_best_replay()
+    assert game.replay is not None and game.ghost is None
+    for dt in dts:
+        game.replay_tick(dt)
+    # 記録を流し終えると「クリアしないまま記録が終わった」扱いで状態は変わるが、位置・鬼・アイテムは記録したときと同じ
+    assert snapshot(game)[1:] == expected[1:]
+    assert game.replay_frame == len(dts)

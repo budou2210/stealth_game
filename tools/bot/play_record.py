@@ -70,6 +70,7 @@ class Replay(StealthGame):
     def bind_events(self):
         super().bind_events()
         self.ignore("m")  # 難易度選択には戻れない（戻ると記録と合わなくなる）
+        self.ignore("v")  # クリア画面の「今のプレイを再生」は使わない（R で最初から再生できる）
 
     def restart_game(self):
         """R：最初から再生し直す（ゲームだけを始め直すと、配置が変わり入力も途中から続いてしまう）。"""

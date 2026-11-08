@@ -94,8 +94,8 @@ def test_menu_replay_has_ghost_and_other_levels_do_not(game_class):
     game.start_game(NORMAL)
     game.state = "win"
     game.play_best_replay()
-    assert game.replay is None, "タイムアタック以外のクリア画面では、V で再生しない"
-    assert game.ghost is None
+    assert game.replay is not None, "タイムアタック以外のクリア画面でも、V で今のプレイを再生する"
+    assert game.ghost is None, "ゴーストはタイムアタックだけ"
 
 
 def test_ghost_pose_follows_frames(game_class):
