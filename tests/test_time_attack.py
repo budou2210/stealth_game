@@ -95,7 +95,7 @@ def test_best_time_and_replay_are_saved(game_class):
     game.open_menu()
     game.menu_index = MENU_LEVELS.index(TIME_ATTACK)
     assert game.has_best_replay(TIME_ATTACK)
-    game.play_best_replay()
+    game.on_replay_key()
     assert game.replay is not None and game.difficulty is TIME_ATTACK
     game.toggle_pause()
     assert game.state == "paused", "ベスト記録の再生は止められる"

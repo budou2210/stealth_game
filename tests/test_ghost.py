@@ -67,7 +67,7 @@ def test_clear_screen_offers_replay_with_ghost(game_class):
     assert game.text["ghost_replay_hint"] in written(game)
     elapsed = game.elapsed
 
-    game.play_best_replay()  # クリア画面の V：今のプレイを再生
+    game.on_replay_key()  # クリア画面の V：今のプレイを再生
     assert game.replay is not None and game.state == "play"
     assert game.ghost is not None, "タイムアタックの再生にはゴーストが付く"
     assert game.ghost_status() == game.text["ghost_running_status"]
@@ -84,7 +84,7 @@ def test_menu_replay_has_ghost_and_other_levels_do_not(game_class):
     game.open_menu()
     assert game.ghost is None
     game.menu_index = MENU_LEVELS.index(TIME_ATTACK)
-    game.play_best_replay()
+    game.on_replay_key()
     assert game.ghost is not None
     first = game.ghost
     game.restart_game()  # 再生中の R：同じ配置なので、計算し直さずに使い回す
@@ -93,14 +93,14 @@ def test_menu_replay_has_ghost_and_other_levels_do_not(game_class):
     game.open_menu()
     game.start_game(NORMAL)
     game.state = "win"
-    game.play_best_replay()
+    game.on_replay_key()
     assert game.replay is not None, "タイムアタック以外のクリア画面でも、V で今のプレイを再生する"
     assert game.ghost is None, "ゴーストはタイムアタックだけ"
 
 
 def test_ghost_pose_follows_frames(game_class):
     game = win_with_bot(game_class)
-    game.play_best_replay()
+    game.on_replay_key()
     poses = game.ghost["poses"]
     for k in (1, 10, 100):
         x, y, _ = game.ghost_pose(k * DT + 1e-9)

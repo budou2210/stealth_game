@@ -70,7 +70,7 @@ class ReplayMixin:
         best = self.best_times.get(cfg.key)
         return replay is not None and best is not None and abs(replay["time"] - best) < 1e-6
 
-    def play_best_replay(self):
+    def on_replay_key(self):
         """メニューの V：選んでいる難易度のベスト記録を再生する。
         クリア画面の V：今のプレイを再生する（タイムアタックはボットのゴーストつき）。"""
         if self.state == "win":

@@ -126,7 +126,7 @@ def test_new_best_saves_replay_and_menu_can_play_it(game_class):
     game.open_menu()
     game.menu_index = DIFFICULTIES.index(NORMAL)
     assert game.has_best_replay(NORMAL)
-    game.play_best_replay()
+    game.on_replay_key()
     assert game.replay is not None and game.state == "play"
 
 
@@ -143,7 +143,7 @@ def test_slower_clear_keeps_old_replay(game_class):
 def test_menu_refuses_when_no_replay(game_class):
     game = game_class()
     game.open_menu()
-    game.play_best_replay()
+    game.on_replay_key()
     assert game.replay is None and game.state == "menu"
 
 
@@ -238,7 +238,7 @@ def test_clear_screen_v_replays_this_run_on_any_difficulty(game_class):
     game.state = "win"  # この配置でクリアまで遊ぶのは長いので、クリア画面にしてから V を押す
     del game.is_down  # 再生のときは、本物の is_down（記録のキーを返す）に戻す
     game.mouseWatcherNode.isButtonDown.return_value = False
-    game.play_best_replay()
+    game.on_replay_key()
     assert game.replay is not None and game.ghost is None
     assert game.controls_line() == game.text["this_run_replay_controls"], "「ベスト記録を再生中」とは出さない"
     for dt in dts:

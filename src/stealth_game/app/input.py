@@ -26,7 +26,7 @@ class InputMixin:
         self.accept("escape", sys.exit)
         self.accept("r", self.restart_game)
         self.accept("m", self.open_menu)
-        self.accept("v", self.play_best_replay)
+        self.accept("v", self.on_replay_key)
         self.accept("arrow_up", self.move_menu, [-1])
         self.accept("arrow_down", self.move_menu, [1])
         for i in range(len(MENU_LEVELS)):
