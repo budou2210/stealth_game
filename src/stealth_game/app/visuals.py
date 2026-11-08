@@ -223,7 +223,7 @@ class VisualsMixin:
         view["body"].setColor(*self.body_color(guard))
         if guard.is_stunned():  # 目がくらんでいる間は視界を出さない
             view["cone"].removeAllGeoms()
-        else:
+        elif self.state != "paused":  # 一時停止中は何も動かないので、視界の形を作り直さない
             self.update_cone(guard, view)
         if guard.exclaim_timer > 0:
             self.update_exclaim(guard, view)
@@ -378,9 +378,9 @@ class VisualsMixin:
             alarm = self.camera_alarm_timers[i] > 0 and int(self.camera_alarm_timers[i] * 6) % 2 == 0
             rgb = CAMERA_ALARM_COLOR if alarm else CAMERA_CONE_COLOR
             body.setColor(*(rgb + (1,) if alarm else CAMERA_BODY_COLOR))
-            view_range = CAMERA_VIEW_RANGE
-            self.draw_view_fan(cone, camera.x, camera.y, camera.heading_at(self.elapsed), CAMERA_HALF_ANGLE,
-                               view_range, rgb)
+            if self.state != "paused":  # 一時停止中は首振りも止まっているので、視界の形を作り直さない
+                self.draw_view_fan(cone, camera.x, camera.y, camera.heading_at(self.elapsed), CAMERA_HALF_ANGLE,
+                                   CAMERA_VIEW_RANGE, rgb)
 
     def noise_range_visible(self):
         """足音の範囲を出すか：設定がオンで、プレイ中に安全地帯の外を走っているときだけ。"""

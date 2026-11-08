@@ -111,3 +111,21 @@ def test_best_time_is_saved_and_shown(game_class):
     menu = "\n".join(written_texts(fresh))
     assert fresh.text["best_label"].format(time=150.0) in menu
     assert menu.count(fresh.text["best_label"].format(time=150.0)) == 1, "記録のある難易度だけに出す"
+
+
+def test_pause_does_not_rebuild_view_cones(game_class):
+    """一時停止中は鬼の視界の形を作り直さない（何も動かないので見た目は同じ）。再開すると、また毎コマ作り直す。"""
+    game = started(game_class)
+    game.step(1 / 60)
+    rays = []
+    original = game.world.cast_ray
+    game.world.cast_ray = lambda *args: rays.append(1) or original(*args)
+    press(game, "pause")
+    assert game.state == "paused"
+    rays.clear()
+    for _ in range(5):
+        game.step(1 / 60)
+    assert rays == []
+    press(game, "pause")
+    game.step(1 / 60)
+    assert rays, "再開すると視界をまた作り直す"
