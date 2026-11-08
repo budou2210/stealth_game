@@ -4,10 +4,13 @@ import itertools
 import math
 import random
 
+from stealth_game.constants import PLAYER_RADIUS
 from stealth_game.difficulty import TIME_ATTACK
-from tools.bot.planner import decode_keys
+from stealth_game.world import World
+from tools.bot.planner import decode_keys, encode_keys
 from tools.bot.sim import Sim
-from tools.bot.time_attack import near_best_orders, solve, solve_order
+from tools.bot.ta_graph import Graph, Point
+from tools.bot.time_attack import graph_for, near_best_orders, refine, replay_time, solve, solve_order
 
 
 def random_instance(n, seed):
@@ -48,7 +51,7 @@ def test_near_best_orders_lists_exactly_the_short_orders():
 
 def test_bot_clears_and_record_replays():
     """ボットがクリアでき、残した入力をシミュレーターで最初から流すと同じタイムでクリアする。"""
-    result = solve(3, candidates=5)
+    result = solve(3, candidates=5, refine_seconds=0)
     assert result["outcome"] == "win"
     assert sorted(result["order"]) == list(range(8))
     sim = Sim(3, cfg=TIME_ATTACK)
@@ -56,3 +59,37 @@ def test_bot_clears_and_record_replays():
         sim.step(keys)
     assert sim.state == "win"
     assert math.isclose(sim.elapsed, result["time"], abs_tol=1e-3)
+
+
+def test_segment_check_matches_fine_sampling():
+    """見通しの判定（列ごとの正確な判定）が、線分の上に細かく点を打って調べた結果と一致する。"""
+    graph = Graph(World(), PLAYER_RADIUS)
+    rng = random.Random(0)
+    for _ in range(400):
+        x0, y0, x1, y1 = (rng.uniform(0, 40) for _ in range(4))
+        if rng.random() < 0.5:
+            x1, y1 = x0 + rng.uniform(-3, 3), y0 + rng.uniform(-3, 3)
+        n = int(math.hypot(x1 - x0, y1 - y0) / 0.005) + 2
+        sampled = all(graph.point_free(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n) for k in range(n + 1))
+        assert graph.segment_free(x0, y0, x1, y1) == sampled
+
+
+def test_graph_distance_never_beats_straight_line():
+    """地図の上の最短距離は、壁を無視したオクタイル距離より短くならず、見通せる2点ではそれと等しい。"""
+    world = World()
+    graph = graph_for(world)
+    a, b, c = Point(graph, 2.5, 2.5), Point(graph, 37.5, 37.5), Point(graph, 5.5, 2.5)
+    d, _ = a.distance_to(graph, b)
+    assert d >= 35 * math.sqrt(2) - 1e-9
+    assert math.isclose(a.distance_to(graph, c)[0], 3.0)
+
+
+def test_refine_never_gets_slower_and_lower_bound_holds():
+    """仕上げで遅くならず、仕上げた記録も最初から流すと同じタイムでクリアする。下限の目安はタイムより短い。"""
+    world = World()
+    result = solve(2, candidates=3, refine_seconds=0, world=world)
+    log = decode_keys(result["keys"])
+    better = refine(2, world, log, 1.0, random.Random(0))
+    assert len(better) <= len(log)
+    assert math.isclose(replay_time(2, encode_keys(better), world), len(better) / 30, abs_tol=1e-6)
+    assert result["lower_bound"] < result["time"]
