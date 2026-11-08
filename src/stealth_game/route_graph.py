@@ -1,4 +1,4 @@
-"""タイムアタックのボット用：壁の角だけを中継点にした地図（可視グラフ）と、そこでの最短距離。
+"""タイムアタックのボット（ゴースト）用：壁の角だけを中継点にした地図（可視グラフ）と、そこでの最短距離。
 
 プレイヤーの当たり判定は「中心から ±0.3 の四角形の4隅が、壁のマスに入るか」（World.is_blocked）。
 なので、プレイヤーの中心が通れる場所は「壁のマスを四方に0.3ずつ太らせた四角形」の外側になる。
@@ -17,8 +17,8 @@
 import heapq
 import math
 
-from stealth_game.constants import PLAYER_RADIUS
-from stealth_game.layout import LEVEL_BOUNDS
+from .constants import PLAYER_RADIUS
+from .layout import LEVEL_BOUNDS
 
 SQRT2_1 = math.sqrt(2) - 1
 CORNER_GAP = 0.02  # 角の中継点を、太らせた壁からこれだけ離して置く

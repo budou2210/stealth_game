@@ -301,6 +301,7 @@ class VisualsMixin:
         self.update_item_views(dt)
         self.update_device_views()
         self.update_noise_view()
+        self.update_ghost_view()
 
     # --- 超越の仕掛け ---------------------------------------------------------
     def build_device_views(self):

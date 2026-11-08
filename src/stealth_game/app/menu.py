@@ -43,6 +43,7 @@ class MenuMixin:
 
     def open_menu(self):
         self.stop_replay()
+        self.clear_ghost()
         self.state = "menu"
         self.camera_mode = "overview"
         self.reset_audio()

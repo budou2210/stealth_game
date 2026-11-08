@@ -112,7 +112,7 @@ class HudMixin:
                 total=len(self.item_cells),
                 time=self.elapsed,
                 lives=self.lives_status(),
-                helpers=self.helper_status(),
+                helpers=self.helper_status() + self.ghost_status(),
             )
         )
         self.hint_text.setText(self.hint_line())

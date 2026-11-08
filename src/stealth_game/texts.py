@@ -22,6 +22,10 @@ TEXTS = {
         "time_attack_desc": "",  # 説明は保留中（空なら一覧に説明の行を出さない）
         "time_attack_controls_move": "WASD/矢印: 移動",
         "time_attack_controls_system": "Tab: 視点切替  R: リスタート  M: 難易度  Esc: 終了",
+        "ghost_replay_hint": "V: 今のプレイを再生（ボットのゴーストと一緒に）",
+        "ghost_running_status": "   ボット 走行中",
+        "ghost_goal_status": "   ボット ゴール {time:.2f}秒",
+        "ghost_result": "\nボット {bot:.2f}秒（差 {diff:+.2f}秒）",
         # 操作説明は「移動 → その難易度で使えるお助けアイテム → その他」の順につなげて表示する
         "controls_move": "WASD/矢印: 移動  Shift: 忍び足",
         "cloak_controls": "E・.: 透明化",
@@ -92,6 +96,10 @@ TEXTS = {
         "time_attack_desc": "",
         "time_attack_controls_move": "WASD/Arrows: move",
         "time_attack_controls_system": "Tab: view  R: restart  M: difficulty  Esc: quit",
+        "ghost_replay_hint": "V: watch this run (with the bot's ghost)",
+        "ghost_running_status": "   Bot running",
+        "ghost_goal_status": "   Bot finished {time:.2f}s",
+        "ghost_result": "\nBot {bot:.2f}s (diff {diff:+.2f}s)",
         "controls_move": "WASD/Arrows: move  Shift: sneak",
         "cloak_controls": "E/.: cloak",
         "flash_controls": "Q//: stun",

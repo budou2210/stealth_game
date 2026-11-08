@@ -9,8 +9,9 @@ from stealth_game.difficulty import TIME_ATTACK
 from stealth_game.world import World
 from tools.bot.planner import decode_keys, encode_keys
 from tools.bot.sim import Sim
-from tools.bot.ta_graph import Graph, Point
-from tools.bot.time_attack import graph_for, near_best_orders, refine, replay_time, solve, solve_order
+from stealth_game.ghost import graph_for, near_best_orders, solve_order
+from stealth_game.route_graph import Graph, Point
+from tools.bot.time_attack import refine, replay_time, solve
 
 
 def random_instance(n, seed):

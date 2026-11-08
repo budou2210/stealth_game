@@ -73,7 +73,11 @@ class ReplayMixin:
         return replay is not None and best is not None and abs(replay["time"] - best) < 1e-6
 
     def play_best_replay(self):
-        """メニューの V：選んでいる難易度のベスト記録を再生する。"""
+        """メニューの V：選んでいる難易度のベスト記録を再生する。
+        タイムアタックのクリア画面の V：今のプレイを再生する（ボットのゴーストつき）。"""
+        if self.state == "win" and self.difficulty.time_attack:
+            self.play_this_run()
+            return
         if self.state != "menu":
             return
         cfg = MENU_LEVELS[self.menu_index]
@@ -82,6 +86,15 @@ class ReplayMixin:
             return
         self.play_sound("confirm")
         self.replay = self.best_replay(cfg.key)
+        self.start_replay()
+
+    def play_this_run(self):
+        """今クリアしたプレイ（または今再生し終えた記録）を、最初から再生する。"""
+        if self.replay is None:
+            if self.recording is None:
+                return
+            self.replay = dict(self.recording, time=self.elapsed)
+        self.play_sound("confirm")
         self.start_replay()
 
     def start_replay(self):
@@ -93,6 +106,8 @@ class ReplayMixin:
         cfg = next(c for c in MENU_LEVELS if c.key == self.replay["difficulty"])
         random.setstate(self.replay["random_state"])
         self.start_game(cfg, random_state=self.replay["random_state"])
+        self.prepare_ghost()  # タイムアタックなら、同じ配置をボットに解かせる（約0.6秒）
+        self.replay_pending = 0.0  # 計算にかかった時間の分、再生が飛ばないように
 
     def stop_replay(self):
         self.replay = None
@@ -156,4 +171,4 @@ class ReplayMixin:
             self.end_replay_mismatch()
             return
         self.replay_ended = True
-        self.message_text.setText(self.text["replay_end"].format(time=self.elapsed))
+        self.message_text.setText(self.text["replay_end"].format(time=self.elapsed) + self.ghost_result())

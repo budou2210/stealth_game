@@ -37,6 +37,7 @@ from ..world import World
 from .audio import AUDIO_PRELOAD_THRESHOLD, LOSE_JINGLE_DELAY, NEW_RECORD_DELAY, AudioMixin
 from .camera import CameraMixin
 from .devices import DevicesMixin
+from .ghost import GhostMixin
 from .helpers import HelperMixin
 from .hud import HudMixin
 from .input import InputMixin
@@ -48,7 +49,7 @@ from .visuals import VisualsMixin
 
 class StealthGame(
     InputMixin, CameraMixin, VisualsMixin, HudMixin, MenuMixin, TitleMixin, HelperMixin, AudioMixin, ReplayMixin,
-    DevicesMixin, ShowBase,
+    DevicesMixin, GhostMixin, ShowBase,
 ):
     def __init__(self):
         loadPrcFileData("", "window-title SNEAKUBE\nwin-size 1100 800")
@@ -94,6 +95,7 @@ class StealthGame(
         self.setup_camera()
         self.build_level()
         self.build_actors()
+        self.setup_ghost()
         self.build_device_views()
         self.set_doors_closed(False)
         self.setup_hud()
@@ -149,6 +151,7 @@ class StealthGame(
         self.difficulty = cfg
         self.begin_recording(random_state if random_state is not None else random.getstate())
         self.guards = self.make_guards(cfg)
+        self.clear_ghost()  # リプレイのときは、始めた後に start_replay が作り直す
         self.menu_title.hide()
         self.menu_text.hide()
         self.credit_text.hide()
@@ -395,11 +398,15 @@ class StealthGame(
             self.message_text.setText(self.text["win"].format(time=self.elapsed))
             self.run_later(NEW_RECORD_DELAY, self.show_new_record)
         else:
-            self.message_text.setText(self.text["win_done"].format(time=self.elapsed))
+            self.message_text.setText(self.text["win_done"].format(time=self.elapsed) + self.win_replay_hint())
+
+    def win_replay_hint(self):
+        """タイムアタックのクリア画面だけ：今のプレイをゴーストと一緒に見る V の案内。"""
+        return "\n" + self.text["ghost_replay_hint"] if self.difficulty.time_attack else ""
 
     def show_new_record(self):
         self.play_sound("new_record")
-        self.message_text.setText(self.text["new_record"])
+        self.message_text.setText(self.text["new_record"] + self.win_replay_hint())
 
     def toggle_pause(self):
         """P：プレイ中なら一時停止、一時停止中なら再開する。
