@@ -18,8 +18,8 @@ import time
 from pathlib import Path
 
 from stealth_game.difficulty import TIME_ATTACK
-from stealth_game.exact_route import SAMPLES, STRICT_RADIUS, solve_exact, strict_lower_bound
-from stealth_game.ghost import DIRECTIONS, best_run, drive_through, keys_of
+from stealth_game.exact_route import SAMPLES, STRICT_RADIUS, OrderScorer, solve_exact, strict_lower_bound
+from stealth_game.ghost import DIRECTIONS, best_run, center_orders, drive_through, keys_of
 from stealth_game.world import World
 
 from .levels import RESULTS_ROOT
@@ -27,6 +27,11 @@ from .planner import decode_keys, encode_keys
 from .sim import DT, Sim
 
 DEFAULT_CUTOFF = 22.7  # 足切りの秒数の初期値。2000配置の厳密な下限で、22.7秒未満が7.5%（上位5〜10%を残す）。README の「足切り」
+# 順番の候補：中心どうしの距離で最短の25%増しまでの順番（最大1000本）を、円に触れればよい前提の長さ
+# （exact_route.OrderScorer）で比べ、短い10本を、中心どうしの距離で選んだ候補と一緒に動かして比べる
+ORDER_MARGIN = 0.25
+ORDER_POOL = 1000
+ORDER_TOP = 10
 CHECKPOINT_EVERY = 15  # 仕上げで取っておく途中の状態の間隔（コマ）
 RESULTS = RESULTS_ROOT / "time_attack"
 
@@ -143,7 +148,7 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
     if cutoff is not None and bound_frames * DT >= cutoff:
         result.update(outcome="cut", total_seconds=round(time.perf_counter() - started, 3))
         return result
-    run = best_run(world, item_cells, candidates, margin)
+    run = best_run(world, item_cells, orders=choose_orders(world, item_cells, candidates, margin))
     best_time, best_log = run["time"], run["log"]
     exact = None
     if best_log is not None and exact_samples > 0:
@@ -180,6 +185,19 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
         keys=encode_keys(best_log) if win else [],
     )
     return result
+
+
+def choose_orders(world, item_cells, candidates, margin):
+    """動かして比べる順番：中心どうしの距離で選んだ候補（今までどおり）と、円に触れればよい前提の長さで短い候補。"""
+    plain, _ = center_orders(world, item_cells, margin, candidates)
+    pool, _ = center_orders(world, item_cells, ORDER_MARGIN, ORDER_POOL)
+    scorer = OrderScorer(world, item_cells)
+    scored = sorted((scorer.length(order), order) for _, order in pool)
+    orders = []
+    for order in [o for _, o in plain] + [o for _, o in scored[:ORDER_TOP]]:
+        if order not in orders:
+            orders.append(order)
+    return orders
 
 
 def pickup_order(seed, world, log):

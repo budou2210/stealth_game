@@ -136,3 +136,21 @@ def test_cutoff_skips_slow_layouts():
     assert cut["outcome"] == "cut" and cut["keys"] == []
     passed = solve(1, refine_seconds=0, world=world, exact_samples=120, cutoff=frames / 30 + 0.01)
     assert passed["outcome"] == "win" and passed["min_frames"] is not None, "ボットのタイムが足切り以上でも、最後まで計算する"
+
+
+def test_order_scorer_prefers_the_order_that_touches_circles_well():
+    """円に触れればよい前提の長さ（少なめの候補で測る）は、細かく測った最短とほぼ同じで、順番の良し悪しを見分ける。
+    種104：中心どうしの距離では 5→0 が短く見えるが、円に触れる前提では 0→5 のほうが短い。"""
+    from stealth_game.exact_route import OrderScorer
+    from tools.bot.time_attack import choose_orders
+
+    world = World()
+    items = Sim(104, cfg=TIME_ATTACK, world=world).item_cells
+    scorer = OrderScorer(world, items)
+    planned, better = [5, 0, 4, 1, 3, 2, 6, 7], [0, 5, 4, 1, 3, 2, 6, 7]
+    assert scorer.length(better) < scorer.length(planned)
+    fine = solve_exact(world, items, better, samples=360)
+    assert fine["length"] - fine["slack"] <= scorer.length(better) <= fine["length"] + 0.5
+    assert scorer.length(planned, limit=scorer.length(better)) == math.inf, "長さの上限を超えたら打ち切る"
+    orders = choose_orders(world, items, candidates=10, margin=0.08)
+    assert better in orders and len(orders) == len({tuple(o) for o in orders})

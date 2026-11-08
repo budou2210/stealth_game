@@ -134,60 +134,8 @@ def solve_exact(world, item_cells, order, samples=SAMPLES, radius=PLAYER_RADIUS)
         layers.append(pts)
         widest.append(w)
     vis = [[g.attach(x, y) for x, y in layer] for layer in layers]
-
-    value = [0.0]
-    back = []  # 各区間：候補ごとの (前の候補の番号, 角の並び)
-    for k in range(1, len(layers)):
-        prev_pts, prev_vis, pts = layers[k - 1], vis[k - 1], layers[k]
-        # 点 → 角
-        msg = {}
-        for p, links in enumerate(prev_vis):
-            for u, d in links:
-                c = value[p] + d
-                if c < msg.get(u, (math.inf,))[0]:
-                    msg[u] = (c, p)
-        # 角 → 角
-        ends = {w for links in vis[k] for w, _ in links}
-        m2 = {}
-        for w in ends:
-            best = (math.inf, None)
-            for u, (c, _) in msg.items():
-                t = c + em.dist[u][w]
-                if t < best[0]:
-                    best = (t, u)
-            m2[w] = best
-        new_value, new_back = [], []
-        by_value = sorted(range(len(prev_pts)), key=value.__getitem__)
-        if k == 1:
-            (pcx, pcy), spread = (sx, sy), 0.0
-        else:
-            (pcx, pcy), spread = targets[k - 2], OCTILE_PER_EUCLID * radii[k - 2]
-        # 2つの円の間に壁がなければ（中心どうしの線分を、体の大きさ＋両方の半径だけ太らせても壁に触れなければ）、
-        # 前の候補とこの候補のどの組もまっすぐ見通せるので、組ごとの見通しの判定を省く
-        cur_c, cur_r = targets[k - 1], radii[k - 1]
-        prev_r = 0.0 if k == 1 else radii[k - 2]
-        all_visible = g.segment_free(pcx, pcy, cur_c[0], cur_c[1], g.radius + prev_r + cur_r)
-        for q, (qx, qy) in enumerate(pts):
-            best = (math.inf, None, None)
-            for w, d in vis[k][q]:
-                t, u = m2[w]
-                if t + d < best[0]:
-                    best = (t + d, msg[u][1], (u, w))
-            # まっすぐ見通せる組（角を通る道より短くなりうるものだけ、見通しを調べる）。
-            # 前の候補は「そこまでの長さ」の短い順に見て、残りがどれも今の最短に届かなくなったら打ち切る
-            # （前の候補はどれも前の円の中心から直線距離 r 以内なので、q までの長さは 中心からの長さ − 1.0824·r 以上）
-            reach = octile(pcx, pcy, qx, qy) - spread
-            for p in by_value:
-                if value[p] + reach >= best[0]:
-                    break
-                px, py = prev_pts[p]
-                t = value[p] + octile(px, py, qx, qy)
-                if t < best[0] and (all_visible or g.segment_free(px, py, qx, qy)):
-                    best = (t, p, None)
-            new_value.append(best[0])
-            new_back.append((best[1], best[2]))
-        value = new_value
-        back.append(new_back)
+    anchors = [((sx, sy), 0.0)] + [(c, rad) for c, rad in zip(targets, radii)]
+    value, back = chain_dp(em, layers, vis, anchors, keep_back=True)
 
     end = min(range(len(value)), key=value.__getitem__)
     length = value[end]
@@ -218,6 +166,96 @@ def solve_exact(world, item_cells, order, samples=SAMPLES, radius=PLAYER_RADIUS)
         "seconds": time.perf_counter() - started,
     }
 
+
+def chain_dp(em, layers, vis, anchors, keep_back=False, limit=math.inf):
+    """「層0の点 → 層1の候補 → … → 最後の層の候補」の一番短いつながりを、前から順に表を埋めて求める。
+    layers[k]：k 番目の層の候補の点。vis[k]：それぞれの点から見える角 [(角, 距離)]。
+    anchors[k]：(層 k の円の中心, 半径)（打ち切りの見積もりに使う）。
+    戻り値 (最後の層の各候補までの最短の長さ, 各区間の (前の候補, 通る角の組) の表。keep_back が偽なら None)。
+    limit を渡すと、どこかの層で全部の候補が limit を超えたら、そこで打ち切る（最後の層の値はすべて inf）。"""
+    g = em.graph
+    value = [0.0] * len(layers[0])
+    back = [] if keep_back else None
+    for k in range(1, len(layers)):
+        prev_pts, prev_vis, pts = layers[k - 1], vis[k - 1], layers[k]
+        # 点 → 角
+        msg = {}
+        for p, links in enumerate(prev_vis):
+            vp = value[p]
+            for u, d in links:
+                c = vp + d
+                if c < msg.get(u, (math.inf,))[0]:
+                    msg[u] = (c, p)
+        # 角 → 角
+        ends = {w for links in vis[k] for w, _ in links}
+        m2 = {}
+        for w in ends:
+            best = (math.inf, None)
+            for u, (c, _) in msg.items():
+                t = c + em.dist[u][w]
+                if t < best[0]:
+                    best = (t, u)
+            m2[w] = best
+        new_value, new_back = [], []
+        by_value = sorted(range(len(prev_pts)), key=value.__getitem__)
+        (pcx, pcy), prev_r = anchors[k - 1]
+        spread = OCTILE_PER_EUCLID * prev_r
+        # 2つの円の間に壁がなければ（中心どうしの線分を、体の大きさ＋両方の半径だけ太らせても壁に触れなければ）、
+        # 前の候補とこの候補のどの組もまっすぐ見通せるので、組ごとの見通しの判定を省く
+        (ccx, ccy), cur_r = anchors[k]
+        all_visible = g.segment_free(pcx, pcy, ccx, ccy, g.radius + prev_r + cur_r)
+        for q, (qx, qy) in enumerate(pts):
+            best = (math.inf, None, None)
+            for w, d in vis[k][q]:
+                t, u = m2[w]
+                if t + d < best[0]:
+                    best = (t + d, msg[u][1], (u, w))
+            # まっすぐ見通せる組（角を通る道より短くなりうるものだけ、見通しを調べる）。
+            # 前の候補は「そこまでの長さ」の短い順に見て、残りがどれも今の最短に届かなくなったら打ち切る
+            # （前の候補はどれも前の円の中心から直線距離 r 以内なので、q までの長さは 中心からの長さ − 1.0824·r 以上）
+            reach = octile(pcx, pcy, qx, qy) - spread
+            for p in by_value:
+                if value[p] + reach >= best[0]:
+                    break
+                px, py = prev_pts[p]
+                t = value[p] + octile(px, py, qx, qy)
+                if t < best[0] and (all_visible or g.segment_free(px, py, qx, qy)):
+                    best = (t, p, None)
+            new_value.append(best[0])
+            new_back.append((best[1], best[2]))
+        value = new_value
+        if keep_back:
+            back.append(new_back)
+        if min(value) > limit:
+            return [math.inf] * len(layers[-1]), back
+    return value, back
+
+
+class OrderScorer:
+    """順番を「円に触れればよい」ことまで入れた長さで比べる（順番を選ぶとき用）。
+
+    円の周の候補は少なめ（samples 個）にし、候補の点と、そこから見える角は、アイテムごとに一度だけ計算して
+    どの順番にも使い回す。順番1つの長さは chain_dp で数ミリ秒。候補が少ない分、長さは本当の最短より
+    少し長めに出るが（保証の幅は solve_exact と同じ式）、順番どうしを比べるには十分。"""
+
+    def __init__(self, world, item_cells, samples=24, radius=PLAYER_RADIUS):
+        self.em = exact_map(world, radius)
+        g = self.em.graph
+        start = cell_center(PLAYER_START)
+        self.start_layer = ([start], [g.attach(*start)], (start, 0.0))
+        centers = [cell_center(c) for c in item_cells] + [cell_center(EXIT_CELL)]
+        radii = [ITEM_PICKUP_DISTANCE - INSIDE] * len(item_cells) + [EXIT_DISTANCE - INSIDE]
+        self.layers = []
+        for (cx, cy), rad in zip(centers, radii):
+            pts, _ = circle_samples(g, cx, cy, rad, samples)
+            self.layers.append((pts, [g.attach(x, y) for x, y in pts], ((cx, cy), rad)))
+
+    def length(self, order, limit=math.inf):
+        """順番 order の長さ（limit を超えると分かった時点で打ち切り、inf を返す）。"""
+        chosen = [self.start_layer] + [self.layers[i] for i in order] + [self.layers[-1]]
+        value, _ = chain_dp(self.em, [c[0] for c in chosen], [c[1] for c in chosen], [c[2] for c in chosen],
+                            limit=limit)
+        return min(value)
 
 
 def frames_for(length):

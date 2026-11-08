@@ -304,15 +304,29 @@ def drive_through(world, item_cells, order, touches):
     return drive(graph, item_cells, route, keys)
 
 
-def best_run(world, item_cells, candidates=10, margin=0.08):
+def center_orders(world, item_cells, margin, count):
+    """アイテムの中心どうしの距離で、最短の (1 + margin) 倍以内の順番を、短い順に最大 count 本。
+    戻り値 ([(距離, 順番)], 最短の距離)。"""
+    graph = graph_for(world)
+    xys = (cell_center(PLAYER_START), [cell_center(c) for c in item_cells], cell_center(EXIT_CELL))
+    _, legs = leg_distances(graph, *xys)
+    cost, shortest = solve_order(*legs)
+    return near_best_orders(cost, legs[0], legs[1], shortest * (1 + margin), count), shortest
+
+
+def best_run(world, item_cells, candidates=10, margin=0.08, orders=None):
     """配置 item_cells を解く。戻り値は辞書：time（クリアの秒数。解けなければ None）・order・log・poses・
-    distance（地図の上の最短距離）・plan_seconds（道と順番の計算の秒数）・candidates。"""
+    distance（地図の上の最短距離）・plan_seconds（道と順番の計算の秒数）・candidates。
+    orders（順番の並び）を渡すと、中心どうしの距離で選ぶ代わりに、その順番を動かして比べる。"""
     started = time.perf_counter()
     graph = graph_for(world)
     xys = (cell_center(PLAYER_START), [cell_center(c) for c in item_cells], cell_center(EXIT_CELL))
     (start, centers, exit_point), legs = leg_distances(graph, *xys)
     cost, shortest = solve_order(*legs)
-    orders = near_best_orders(cost, legs[0], legs[1], shortest * (1 + margin), candidates)
+    if orders is None:
+        orders = near_best_orders(cost, legs[0], legs[1], shortest * (1 + margin), candidates)
+    else:
+        orders = [(None, list(o)) for o in orders]
     plan_seconds = time.perf_counter() - started
     best = {"time": None, "order": None, "log": None, "poses": None}
     cache = {}
