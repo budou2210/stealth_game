@@ -130,14 +130,17 @@ def touch_candidates(graph, center, radius):
     return found
 
 
-def plan_route(graph, start, centers, exit_point, order, candidates_cache):
-    """順番 order の道。戻り値 ([(x, y, 区間の番号, 種類)], 区間ごとの目標)。区間 i は i 番目の目標へ向かう道
-    （最後の区間は出口）。種類は "corner"（壁の角）・"touch"（触れる点）・"center"（目標の中心）。"""
+def plan_route(graph, start, centers, exit_point, order, candidates_cache, touches=None):
+    """順番 order の道。戻り値 ([(x, y, 区間の番号, 種類, 点)], 区間ごとの目標)。区間 i は i 番目の目標へ向かう道
+    （最後の区間は出口）。種類は "corner"（壁の角）・"touch"（触れる点）・"center"（目標の中心）。
+    touches を渡すと、触れる点を選ばずに、その点 [(x, y)]（目標ごと）を使う。"""
     targets = [centers[i] for i in order] + [exit_point]
     radii = [ITEM_PICKUP_DISTANCE - TOUCH_MARGIN] * len(order) + [EXIT_DISTANCE - TOUCH_MARGIN]
     keys = list(order) + ["exit"]
     touch = [start] + list(targets)
-    for _ in range(TOUCH_ROUNDS):
+    if touches is not None:
+        touch = [start] + [Point(graph, x, y) for x, y in touches]
+    for _ in range(TOUCH_ROUNDS if touches is None else 0):
         changed = False
         for i in range(1, len(touch)):
             key = keys[i - 1]
@@ -291,6 +294,27 @@ def drive(graph, item_cells, route, keys, give_up=math.inf):
         if sim.elapsed > give_up:
             return None, log, poses
     return (sim.elapsed if sim.state == "win" else None), log, poses
+
+
+def drive_through(world, item_cells, order, touches):
+    """順番 order・触れる点 touches（目標ごとの (x, y)。円の周の上の点）で動かす。触れる点は、拾える距離より
+    少し内側（TOUCH_MARGIN）へ寄せて目指す。戻り値 (クリアの秒数 または None, 入力の記録, 各コマの後の位置)。
+    触れる点が、道を引くときの大きさでは通れない場所なら (None, None, None)。"""
+    graph = graph_for(world)
+    centers_xy = [cell_center(item_cells[i]) for i in order] + [cell_center(EXIT_CELL)]
+    radii = [ITEM_PICKUP_DISTANCE - TOUCH_MARGIN] * len(order) + [EXIT_DISTANCE - TOUCH_MARGIN]
+    inner = []
+    for (cx, cy), (x, y), r in zip(centers_xy, touches, radii):
+        d = math.hypot(x - cx, y - cy) or 1.0
+        px, py = cx + (x - cx) * r / d, cy + (y - cy) * r / d
+        if not graph.point_free(px, py):
+            return None, None, None
+        inner.append((px, py))
+    start = Point(graph, *cell_center(PLAYER_START))
+    centers = [Point(graph, *cell_center(c)) for c in item_cells]
+    exit_point = Point(graph, *cell_center(EXIT_CELL))
+    route, keys = plan_route(graph, start, centers, exit_point, order, {}, touches=inner)
+    return drive(graph, item_cells, route, keys)
 
 
 def best_run(world, item_cells, candidates=10, margin=0.08):

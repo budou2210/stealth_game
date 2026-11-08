@@ -33,7 +33,9 @@ def octile(ax, ay, bx, by):
 
 
 class Graph:
-    def __init__(self, world, radius=PLAN_RADIUS):
+    def __init__(self, world, radius=PLAN_RADIUS, gap=CORNER_GAP):
+        """radius: 体の大きさ（道を引くときは少し大きく見る）。gap: 角の中継点を、太らせた壁から離す幅。
+        本当の最短の長さを測るとき（ghost.exact_route）は、体の本当の大きさ・ほぼ0の幅で作る。"""
         self.world = world
         self.radius = radius
         x1, y1, x2, y2 = LEVEL_BOUNDS
@@ -48,7 +50,7 @@ class Graph:
                     continue  # 出っ張った角は、4マスのうち1マスだけが壁の点
                 a, b = around[0]
                 sx, sy = 1 - 2 * a, 1 - 2 * b
-                off = radius + CORNER_GAP
+                off = radius + gap
                 x, y = gx + sx * off, gy + sy * off
                 if self.point_free(x, y):
                     self.corners.append((x, y, sx, sy))
