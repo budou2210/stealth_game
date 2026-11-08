@@ -128,7 +128,7 @@ class HudMixin:
     def controls_line(self):
         """操作説明。プレイ中はその難易度で使えるお助けアイテムだけ、メニューでは全種類を載せる。"""
         if self.replay is not None:
-            return self.text["replay_controls"]
+            return self.text["this_run_replay_controls" if self.replay.get("this_run") else "replay_controls"]
         if self.state != "menu" and self.difficulty.time_attack:
             return "  ".join([self.text["time_attack_controls_move"], self.text["time_attack_controls_system"]])
         kinds = list(HELPER_MAX_HELD) if self.state == "menu" else self.helper_kinds()

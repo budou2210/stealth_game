@@ -240,6 +240,7 @@ def test_clear_screen_v_replays_this_run_on_any_difficulty(game_class):
     game.mouseWatcherNode.isButtonDown.return_value = False
     game.play_best_replay()
     assert game.replay is not None and game.ghost is None
+    assert game.controls_line() == game.text["this_run_replay_controls"], "「ベスト記録を再生中」とは出さない"
     for dt in dts:
         game.replay_tick(dt)
     # 記録を流し終えると「クリアしないまま記録が終わった」扱いで状態は変わるが、位置・鬼・アイテムは記録したときと同じ

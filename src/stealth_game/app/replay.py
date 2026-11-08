@@ -91,7 +91,7 @@ class ReplayMixin:
         if self.replay is None:
             if self.recording is None:
                 return
-            self.replay = dict(self.recording, time=self.elapsed)
+            self.replay = dict(self.recording, time=self.elapsed, this_run=True)  # this_run：ベスト記録ではない再生
         self.play_sound("confirm")
         self.start_replay()
 
