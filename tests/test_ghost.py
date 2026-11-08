@@ -124,3 +124,43 @@ def test_drive_touches_clears_and_matches_the_real_game():
     for keys in log:
         sim.step(keys)
     assert sim.state == "win" and math.isclose(sim.elapsed, t)
+
+
+def test_smooth_log_groups_diagonal_and_straight_without_changing_the_time():
+    """ボットの記録の、斜めとまっすぐの細かい切り替えをまとめても、コマ数は変わらず、本物と同じ処理でもクリアする。"""
+    from stealth_game.ghost import smooth_log
+    from tools.bot.planner import decode_keys, encode_keys
+    from tools.bot.time_attack import drive_through, solve_exact
+
+    world = World()
+    sim = Sim(104, cfg=TIME_ATTACK, world=world)
+    order = [0, 5, 4, 1, 3, 2, 6, 7]
+    exact = solve_exact(world, sim.item_cells, order, samples=60)
+    _, log, _ = drive_through(world, sim.item_cells, order, exact["touches"])  # 並べ替える前の、細かく切り替わる記録
+    smoothed = smooth_log(world, sim.item_cells, log)
+    assert len(smoothed) == len(log)
+    assert len(encode_keys(smoothed)) < len(encode_keys(log)) / 2, "切り替えの回数が半分以下になる"
+    for keys in decode_keys(encode_keys(smoothed)):
+        sim.step(keys)
+    assert sim.state == "win"
+
+
+def test_smooth_log_on_a_hand_made_zigzag():
+    """壁のない場所での「右・右上」のくり返しは、「右上をまとめて → 右をまとめて」になる。"""
+    from stealth_game.ghost import Run, smooth_log
+
+    world = World()
+    items = Sim(0, cfg=TIME_ATTACK, world=world).item_cells
+    right, up_right = frozenset({"right"}), frozenset({"right", "up"})
+    lead = [right] * 20  # スタートの小部屋から、左下の部屋の中ほどまで出る
+    zig = [right, up_right] * 6
+    log = lead + zig
+    out = smooth_log(world, items, log + [frozenset()])  # クリアしない記録は、元のまま返る
+    assert out == log + [frozenset()]
+    run_a, run_b = Run(world, items), Run(world, items)
+    for keys in log:
+        run_a.step(keys)
+    grouped = lead + [up_right] * 6 + [right] * 6
+    for keys in grouped:
+        run_b.step(keys)
+    assert math.isclose(run_a.player.x, run_b.player.x) and math.isclose(run_a.player.y, run_b.player.y)

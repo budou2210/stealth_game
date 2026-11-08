@@ -19,7 +19,7 @@ from pathlib import Path
 
 from stealth_game.difficulty import TIME_ATTACK
 from stealth_game.exact_route import SAMPLES, STRICT_RADIUS, OrderScorer, solve_exact, strict_lower_bound
-from stealth_game.ghost import DIRECTIONS, best_run, center_orders, drive_through, drive_touches, keys_of
+from stealth_game.ghost import DIRECTIONS, best_run, center_orders, drive_through, drive_touches, keys_of, smooth_log
 from stealth_game.world import World
 
 from .levels import RESULTS_ROOT
@@ -164,6 +164,12 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
         best_log = refine(seed, world, best_log, refine_seconds, random.Random(seed))
         best_time = len(best_log) * DT
     win = best_log is not None
+    if win:
+        # 斜めとまっすぐの細かい切り替えをまとめる（タイムは変わらない）。本物と同じ処理で確かめ、だめなら元のまま
+        smooth = smooth_log(world, item_cells, best_log)
+        if len(smooth) <= len(best_log) and replay_time(seed, encode_keys(smooth), world) is not None:
+            best_log = smooth
+            best_time = len(best_log) * DT
     picked = pickup_order(seed, world, best_log) if win else None
     if exact is not None:
         if picked != exact["order"]:
@@ -226,14 +232,17 @@ def replay_time(seed, keys, world=None):
 
 
 def save(result, results=RESULTS):
-    """クリアの記録を play_record で再生できる形で保存する（同じ種で前の記録のほうが速ければ残す）。"""
+    """クリアの記録を play_record で再生できる形で保存する。同じ種の前の記録より速いとき、
+    または同じタイムでキーの切り替えが少ない（動きが滑らかな）ときだけ書き換える。"""
     if result["outcome"] != "win":
         return False
     folder = results / "wins"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"seed_{result['seed']}.json"
-    if path.exists() and json.loads(path.read_text(encoding="utf-8"))["time"] <= result["time"]:
-        return False
+    if path.exists():
+        old = json.loads(path.read_text(encoding="utf-8"))
+        if (old["time"], len(old["keys"])) <= (result["time"], len(result["keys"])):
+            return False
     record = {"seed": result["seed"], "dt": DT, "time": result["time"], "outcome": "win",
               "level": TIME_ATTACK.key, "order": result["order"], "lower_bound": result["lower_bound"],
               "exact_length": result["exact_length"], "exact_slack": result["exact_slack"],

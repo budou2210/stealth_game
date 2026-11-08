@@ -15,6 +15,7 @@
 5. 下限：どの順番でどう動かしても越えられない厳密な下限は exact_route.strict_lower_bound にある。
 """
 
+import copy
 import math
 import time
 
@@ -237,6 +238,15 @@ class Run:
     def done(self):
         return self.state == "win"
 
+    def clone(self):
+        """今の状態のコピー（マップとアイテムの位置は変わらないので共有する）。"""
+        other = Run.__new__(Run)
+        other.world, other.items = self.world, self.items
+        other.items_collected = set(self.items_collected)
+        other.player = copy.copy(self.player)
+        other.elapsed, other.state = self.elapsed, self.state
+        return other
+
 
 def drive(graph, item_cells, route, keys, give_up=math.inf):
     """道どおりに動かす。戻り値 (クリアの秒数 または None, 入力の記録, 各コマの後の (x, y, 向き))。
@@ -412,6 +422,84 @@ def drive_touches(world, item_cells, order, touches, give_up=math.inf):
     return (sim.elapsed if sim.state == "win" else None), log, poses
 
 
+def direction_of(keys):
+    """押しているキーの組 → 向き (dx, dy)。"""
+    return (int("right" in keys) - int("left" in keys), int("up" in keys) - int("down" in keys))
+
+
+def _mixable(a, b):
+    """向き a と b が、斜めとまっすぐの45°となりどうしか（混ぜても、まとめても同じ長さになる組）。"""
+    return a != b and (0, 0) not in (a, b) and max(abs(a[0] - b[0]), abs(a[1] - b[1])) == 1 and (
+        (a[0] and a[1]) != (b[0] and b[1]))
+
+
+def smooth_log(world, item_cells, log):
+    """入力の記録の「斜めとまっすぐが細かく入れ替わる区間」を、「斜めをまとめて → まっすぐをまとめて」
+    （または逆）に並べ替える。どちらでも着く場所とかかるコマ数は同じなので、タイムを変えずに動きを滑らかにできる。
+
+    区間ごとに、並べ替える前と後で、区間の終わりの位置（ほぼ一致）と拾ったアイテムと状態が同じになるときだけ採る
+    （壁に当たると位置が変わるので採らない）。最後に記録を最初から流し直し、同じかそれより少ないコマ数で
+    クリアできなければ、元の記録を返す。"""
+    def advance(run, keys_list):
+        for keys in keys_list:
+            if run.done:
+                break
+            run.step(keys)
+        return run
+
+    def regroup(run, window, a, b):
+        """window（向き a と b だけの区間）を並べ替えて run を進め、使った入力を返す。区間まるごとで並べ替えられなければ
+        （途中で壁に当たる）、半分に分けてそれぞれ試す。"""
+        if b is None or len(window) < 3:
+            advance(run, window)
+            return list(window)
+        first = [k for k in window if direction_of(k) == a]
+        second = [k for k in window if direction_of(k) == b]
+        original = advance(run.clone(), window)
+        for trial in (first + second, second + first):
+            end = advance(run.clone(), trial)
+            if (abs(end.player.x - original.player.x) < 1e-9 and abs(end.player.y - original.player.y) < 1e-9
+                    and end.items_collected == original.items_collected and end.state == original.state):
+                advance(run, trial)
+                return trial
+        half = len(window) // 2
+        left = regroup(run, window[:half], a, b)
+        return left + regroup(run, window[half:], a, b)
+
+    run = Run(world, item_cells)
+    out = []
+    i = 0
+    n = len(log)
+    while i < n:
+        a = direction_of(log[i])
+        b = None
+        j = i + 1
+        while j < n:
+            d = direction_of(log[j])
+            if d != a and d != b:
+                if b is None and _mixable(a, d):
+                    b = d
+                else:
+                    break
+            j += 1
+        out += regroup(run, log[i:j], a, b)
+        i = j
+    check = advance(Run(world, item_cells), out)
+    if check.state != "win":
+        return list(log)
+    return out
+
+
+def poses_of(world, item_cells, log):
+    """記録を流したときの、各コマの後の (x, y, 向き)。"""
+    run = Run(world, item_cells)
+    poses = []
+    for keys in log:
+        run.step(keys)
+        poses.append((run.player.x, run.player.y, run.player.heading))
+    return poses
+
+
 def best_run(world, item_cells, candidates=10, margin=0.08, orders=None):
     """配置 item_cells を解く。戻り値は辞書：time（クリアの秒数。解けなければ None）・order・log・poses・
     distance（地図の上の最短距離）・plan_seconds（道と順番の計算の秒数）・candidates。
@@ -433,6 +521,9 @@ def best_run(world, item_cells, candidates=10, margin=0.08, orders=None):
         t, log, poses = drive(graph, item_cells, route, keys, give_up=best["time"] or math.inf)
         if t is not None and (best["time"] is None or t < best["time"]):
             best = {"time": t, "order": order, "log": log, "poses": poses}
+    if best["log"] is not None:
+        best["log"] = smooth_log(world, item_cells, best["log"])  # タイムを変えずに、細かい切り替えをまとめる
+        best["poses"] = poses_of(world, item_cells, best["log"])
     best.update(distance=shortest, plan_seconds=plan_seconds, candidates=len(orders))
     return best
 
