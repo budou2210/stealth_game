@@ -112,8 +112,8 @@ def test_ghost_pose_follows_frames(game_class):
 
 def test_drive_touches_clears_and_matches_the_real_game():
     """「残りの長さが一番短くなる向き」を選ぶ動かし方でもクリアでき、その入力は本物と同じ処理でもクリアする。"""
-    from stealth_game.exact_route import solve_exact
-    from stealth_game.ghost import drive_touches
+    from tools.bot.exact_route import solve_exact
+    from tools.bot.ta_drive import drive_touches
 
     world = World()
     sim = Sim(61, cfg=TIME_ATTACK, world=world)

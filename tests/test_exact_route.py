@@ -1,11 +1,11 @@
-"""選んだ順番での本当の最短の道（stealth_game/exact_route.py）のテスト。"""
+"""選んだ順番での本当の最短の道（tools/bot/exact_route.py）のテスト。"""
 
 import itertools
 import math
 
 from stealth_game.constants import ITEM_PICKUP_DISTANCE, PLAYER_RUN_SPEED
 from stealth_game.difficulty import TIME_ATTACK
-from stealth_game.exact_route import (
+from tools.bot.exact_route import (
     EXIT_DISTANCE,
     INSIDE,
     STRICT_RADIUS,
@@ -141,7 +141,7 @@ def test_cutoff_skips_slow_layouts():
 def test_order_scorer_prefers_the_order_that_touches_circles_well():
     """円に触れればよい前提の長さ（少なめの候補で測る）は、細かく測った最短とほぼ同じで、順番の良し悪しを見分ける。
     種104：中心どうしの距離では 5→0 が短く見えるが、円に触れる前提では 0→5 のほうが短い。"""
-    from stealth_game.exact_route import OrderScorer
+    from tools.bot.exact_route import OrderScorer
     from tools.bot.time_attack import choose_orders
 
     world = World()

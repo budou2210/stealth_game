@@ -18,13 +18,14 @@ import time
 from pathlib import Path
 
 from stealth_game.difficulty import TIME_ATTACK
-from stealth_game.exact_route import SAMPLES, STRICT_RADIUS, OrderScorer, solve_exact, strict_lower_bound
-from stealth_game.ghost import DIRECTIONS, best_run, center_orders, drive_through, drive_touches, keys_of, smooth_log
+from stealth_game.ghost import DIRECTIONS, best_run, keys_of, smooth_log
 from stealth_game.world import World
 
+from .exact_route import SAMPLES, STRICT_RADIUS, OrderScorer, solve_exact, strict_lower_bound
 from .levels import RESULTS_ROOT
 from .planner import decode_keys, encode_keys
 from .sim import DT, Sim
+from .ta_drive import center_orders, drive_through, drive_touches
 
 DEFAULT_CUTOFF = 22.7  # 足切りの秒数の初期値。2000配置の厳密な下限で、22.7秒未満が7.5%（上位5〜10%を残す）。README の「足切り」
 # 順番の候補：中心どうしの距離で最短の25%増しまでの順番（最大1000本）を、円に触れればよい前提の長さ

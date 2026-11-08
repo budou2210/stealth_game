@@ -1,4 +1,4 @@
-"""順番を決めたときの、本当の最短の道（触れる点の選び方まで含めて、保証の幅つき）。
+"""（攻略ボット専用）順番を決めたときの、本当の最短の道（触れる点の選び方まで含めて、保証の幅つき）。
 
 問題：スタートから、決めた順番でアイテムの円（半径0.7より内側に入れば拾える）に1回ずつ入り、
 最後に出口の円（半径0.9）に入る道のうち、8方向の移動での長さ（オクタイル距離）が一番短いもの。
@@ -30,10 +30,11 @@
 import math
 import time
 
-from .constants import ITEM_PICKUP_DISTANCE, PLAYER_RADIUS, PLAYER_RUN_SPEED, SIM_DT
-from .grid import cell_center
-from .layout import EXIT_CELL, PLAYER_START
-from .route_graph import Graph, Point, octile
+from stealth_game.constants import ITEM_PICKUP_DISTANCE, PLAYER_RADIUS, PLAYER_RUN_SPEED, SIM_DT
+from stealth_game.grid import cell_center
+from stealth_game.layout import EXIT_CELL, PLAYER_START
+from stealth_game.route_graph import Graph, Point, octile
+from stealth_game.route_order import solve_order
 
 EXIT_DISTANCE = 0.9
 OCTILE_PER_EUCLID = 1.0824  # 直線距離 1 の、8方向の移動での長さの最大（22.5°の向き）
@@ -272,12 +273,10 @@ def strict_lower_bound(world, item_cells, samples=72):
     """どの順番で、どう動かしても、これより少ないコマではクリアできないコマ数（厳密な下限）。
 
     体の大きさ STRICT_RADIUS の地図で、中心どうしの最短距離を測り、そこから「中心から円の周まで」の分を引いて、
-    一番短い順番を動的計画法で求める（ghost.solve_order）。円に触れる点を b とすると、
+    一番短い順番を動的計画法で求める（route_order.solve_order）。円に触れる点を b とすると、
     b どうしの距離 ≥ 中心どうしの距離 − (中心 → b の距離) × 2 なので、中心 → 周の距離の最大 R を引けばよい。
     R は周の上の候補の点で測り、候補の間の分（弧に沿って回り込む分）を足して、取りこぼしのないようにする。
     戻り値は (コマ数, 計算の秒数)。"""
-    from .ghost import solve_order  # ghost が exact_route を使う形にはしていないので、ここで読み込む
-
     started = time.perf_counter()
     g = exact_map(world, STRICT_RADIUS).graph
     centers_xy = [cell_center(c) for c in item_cells] + [cell_center(EXIT_CELL)]

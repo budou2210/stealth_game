@@ -35,7 +35,7 @@ def octile(ax, ay, bx, by):
 class Graph:
     def __init__(self, world, radius=PLAN_RADIUS, gap=CORNER_GAP):
         """radius: 体の大きさ（道を引くときは少し大きく見る）。gap: 角の中継点を、太らせた壁から離す幅。
-        本当の最短の長さを測るとき（ghost.exact_route）は、体の本当の大きさ・ほぼ0の幅で作る。"""
+        本当の最短の長さを測るとき（tools/bot/exact_route.py）は、体の本当の大きさ・ほぼ0の幅で作る。"""
         self.world = world
         self.radius = radius
         x1, y1, x2, y2 = LEVEL_BOUNDS
