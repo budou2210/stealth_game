@@ -108,3 +108,19 @@ def test_ghost_pose_follows_frames(game_class):
     mid = game.ghost_pose(10.5 * DT)
     assert math.isclose(mid[0], (poses[9][0] + poses[10][0]) / 2, abs_tol=1e-6)
     assert game.ghost_pose(10_000)[:2] == poses[-1][:2], "ゴールした後は止まる"
+
+
+def test_drive_touches_clears_and_matches_the_real_game():
+    """「残りの長さが一番短くなる向き」を選ぶ動かし方でもクリアでき、その入力は本物と同じ処理でもクリアする。"""
+    from stealth_game.exact_route import solve_exact
+    from stealth_game.ghost import drive_touches
+
+    world = World()
+    sim = Sim(61, cfg=TIME_ATTACK, world=world)
+    plan = best_run(world, sim.item_cells, candidates=3)
+    exact = solve_exact(world, sim.item_cells, plan["order"], samples=60)
+    t, log, _ = drive_touches(world, sim.item_cells, plan["order"], exact["touches"])
+    assert t is not None
+    for keys in log:
+        sim.step(keys)
+    assert sim.state == "win" and math.isclose(sim.elapsed, t)

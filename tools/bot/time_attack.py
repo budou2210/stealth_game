@@ -19,7 +19,7 @@ from pathlib import Path
 
 from stealth_game.difficulty import TIME_ATTACK
 from stealth_game.exact_route import SAMPLES, STRICT_RADIUS, OrderScorer, solve_exact, strict_lower_bound
-from stealth_game.ghost import DIRECTIONS, best_run, center_orders, drive_through, keys_of
+from stealth_game.ghost import DIRECTIONS, best_run, center_orders, drive_through, drive_touches, keys_of
 from stealth_game.world import World
 
 from .levels import RESULTS_ROOT
@@ -154,9 +154,11 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
     if best_log is not None and exact_samples > 0:
         picked = pickup_order(seed, world, best_log)
         exact = solve_exact(world, item_cells, picked, exact_samples)
-        t, log, _ = drive_through(world, item_cells, picked, exact["touches"])
-        if t is not None and t < best_time:
-            best_time, best_log = t, log
+        # 最短の道の触れる点で、2通りの動かし方を試し、速ければ採る
+        for mover in (drive_through, drive_touches):
+            t, log, _ = mover(world, item_cells, picked, exact["touches"])
+            if t is not None and t < best_time:
+                best_time, best_log = t, log
     driven = best_time
     if best_log is not None and refine_seconds > 0:
         best_log = refine(seed, world, best_log, refine_seconds, random.Random(seed))

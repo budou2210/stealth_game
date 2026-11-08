@@ -140,19 +140,22 @@ def solve_exact(world, item_cells, order, samples=SAMPLES, radius=PLAYER_RADIUS)
     end = min(range(len(value)), key=value.__getitem__)
     length = value[end]
     # 道をたどり直す
-    path, touches = [], []
+    path, touches, route = [], [], []
     q = end
     for k in range(len(layers) - 1, 0, -1):
         p, via = back[k - 1][q]
         touches.append(layers[k][q])
         path.append(layers[k][q])
+        route.append(layers[k][q] + (k - 1, True, 0, 0))
         if via is not None:
             for c in reversed(em.chain(*via)):
                 path.append(g.corners[c][:2])
+                route.append(g.corners[c][:2] + (k - 1, False) + g.corners[c][2:])
         q = p
     path.append((sx, sy))
     path.reverse()
     touches.reverse()
+    route.reverse()
     k = OCTILE_PER_EUCLID
     slack = sum(2 * k * rad * w / 2 for rad, w in zip(radii[:-1], widest[:-1])) + k * radii[-1] * widest[-1] / 2
     step = PLAYER_RUN_SPEED * (1 / 30)
@@ -162,6 +165,9 @@ def solve_exact(world, item_cells, order, samples=SAMPLES, radius=PLAYER_RADIUS)
         "slack": slack,
         "touches": touches,
         "path": path,
+        # スタートの後の道の点 [(x, y, 区間の番号, 触れる点か, sx, sy)]（区間 i は i 番目の目標へ向かう。
+        # sx, sy は角の点のとき、壁から離れる向き。触れる点では 0）
+        "route": route,
         "min_frames": frames_for(length - slack),
         "seconds": time.perf_counter() - started,
     }
