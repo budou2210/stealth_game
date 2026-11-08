@@ -15,8 +15,6 @@ from panda3d.core import (
 from ..constants import (
     CATCH_DISTANCE,
     CAUGHT_FREEZE_TIME,
-    HELPER_MAX_HELD,
-    HELPER_SPAWN_INTERVAL,
     ITEM_MIN_SPACING,
     ITEM_PICKUP_DISTANCE,
     ITEMS_DROPPED_ON_CATCH,
@@ -74,14 +72,11 @@ class StealthGame(
         self.device_nps = []  # 仕掛けの見た目のノード（ゲームを始めるたびに作り直す）
         self.lives = NORMAL.lives
         self.caught_timer = 0.0
-        self.held = {kind: 0 for kind in HELPER_MAX_HELD}  # 持っているお助けアイテムの数
-        self.helper_pickups = {kind: None for kind in HELPER_MAX_HELD}  # マップに出ている箱のセル
-        self.helper_spawn_timers = {kind: HELPER_SPAWN_INTERVAL for kind in HELPER_MAX_HELD}
+        self.reset_helper_state()  # 持っている数・マップに出ている箱・出現までの時間・お知らせ
         self.keys_were_down = {}  # 前のフレームで押されていたキー（押した瞬間の判定用）
         self.cloak_timer = 0.0  # 透明化の残り秒数
         self.placed_decoys = []  # 設置済み: {"cell", "timer", "np"}
         self.sound_rings = []  # 音の広がりの表示: {"np", "timer", "radius"}
-        self.notice_timer = 0.0  # 0より大きい間、出現のお知らせをヒント欄に出す
         self.notice_key = "decoy_appeared"
         self.notice_kinds = []  # 出現のお知らせに載せる種類（同時に出たとき用）
         self.camera_mode = "overview"
@@ -178,11 +173,7 @@ class StealthGame(
         self.setup_devices()  # 鳴る床の場所は、アイテムの配置の後に乱数で選ぶ
         self.build_device_views()
         self.place_item_nodes()
-        self.exit_np.setColor(0.8, 0.2, 0.2, 1)
-        self.held = {kind: 0 for kind in HELPER_MAX_HELD}
-        self.helper_pickups = {kind: None for kind in HELPER_MAX_HELD}
-        self.helper_spawn_timers = {kind: HELPER_SPAWN_INTERVAL for kind in HELPER_MAX_HELD}
-        self.notice_timer = 0.0
+        self.reset_helper_state()
         self.respawn()
 
     def place_item_nodes(self):
@@ -291,6 +282,12 @@ class StealthGame(
             foci.append((cell, 8, 4.0 / len(remaining)))
         return foci
 
+    def call_guards(self, x, y, radius, cell):
+        """(x, y) から radius 以内の鬼に、cell を調べに来させる（音の罠・鳴る床・監視カメラ）。"""
+        for guard in self.guards:
+            if guard.distance_to(x, y) <= radius:
+                guard.hear_decoy(cell)
+
     def alert_allies(self, caller):
         """「応援」：追跡中の鬼が近くの仲間に居場所を伝える。半径0なら何もしない。"""
         radius = self.difficulty.ally_alert_radius
@@ -375,8 +372,6 @@ class StealthGame(
             guard.update(dt, self.player)
         self.share_alerts()
         self.play_event_sounds()
-        exit_color = (0.2, 0.9, 0.3, 1) if self.has_all_items() else (0.8, 0.2, 0.2, 1)
-        self.exit_np.setColor(*exit_color)
         if self.check_caught():
             self.on_caught()
         elif self.check_exit_reached():

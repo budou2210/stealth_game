@@ -27,15 +27,8 @@ BORROWED = [
     "make_guards", "play_event_sounds",
     # 超越の仕掛け
     "setup_devices", "door_occupied", "update_timed_doors", "play_door_sound", "update_noisy_floors",
-    "sound_floor", "update_cameras", "camera_alarm",
+    "sound_floor", "update_cameras", "camera_alarm", "call_guards",
 ]
-
-
-class _NoNode:
-    """描画用のノードの代わり（色を変えても何もしない）。"""
-
-    def setColor(self, *args):
-        pass
 
 
 class Sim:
@@ -63,7 +56,6 @@ class Sim:
         self.notice_timer = 0.0
         self.cloak_timer = 0.0
         self.placed_decoys = []
-        self.exit_np = _NoNode()
         self.doors_closed = False
         for guard in self.guards:
             guard.reset()

@@ -85,3 +85,6 @@ FONT_CANDIDATES = [
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
     "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
 ]
+
+EXIT_CLOSED_COLOR = (0.8, 0.2, 0.2, 1)  # 出口（アイテムを集め終わる前）
+EXIT_OPEN_COLOR = (0.2, 0.9, 0.3, 1)  # 出口（全部集めた後）

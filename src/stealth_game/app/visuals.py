@@ -44,6 +44,8 @@ from ..theme import (
     CONE_RAYS,
     DECOY_PICKUP_COLOR,
     DECOY_PLACED_COLOR,
+    EXIT_CLOSED_COLOR,
+    EXIT_OPEN_COLOR,
     EXCLAIM_BLINK_COLOR,
     EXCLAIM_CARD_COLOR,
     EXCLAIM_COLOR,
@@ -93,9 +95,7 @@ class VisualsMixin:
         self.item_nps = [self.make_item_node() for _ in range(total)]
 
         ex, ey = cell_center(EXIT_CELL)
-        self.exit_np = self.add_box(
-            self.render, (ex - 0.9, ey - 0.9, 0), (1.8, 1.8, 0.12), (0.8, 0.2, 0.2, 1)
-        )
+        self.exit_np = self.add_box(self.render, (ex - 0.9, ey - 0.9, 0), (1.8, 1.8, 0.12), EXIT_CLOSED_COLOR)
         # お助けアイテム（マップに出ている1個）と、音の広がりの円の元
         self.pickup_nps = {
             "decoy": self.make_pickup_node(DECOY_PICKUP_COLOR),
@@ -302,6 +302,9 @@ class VisualsMixin:
         self.update_device_views()
         self.update_noise_view()
         self.update_ghost_view()
+        # 出口：全部集めたら緑、それまでは赤（ゲームを始める前は、アイテムの配置がないので赤のまま）
+        opened = bool(self.item_cells) and self.has_all_items()
+        self.exit_np.setColor(*(EXIT_OPEN_COLOR if opened else EXIT_CLOSED_COLOR))
 
     # --- 超越の仕掛け ---------------------------------------------------------
     def build_device_views(self):

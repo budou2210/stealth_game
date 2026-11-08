@@ -13,7 +13,7 @@ from ..constants import (
     PLAYER_RADIUS,
 )
 from ..devices import build_cameras, build_timed_doors, pick_noisy_floors
-from ..grid import cell_center, world_to_cell
+from ..grid import box_corners, cell_center, world_to_cell
 from ..player import player_cell
 from ..theme import CAMERA_RING_COLOR, FLOOR_RING_COLOR
 
@@ -22,7 +22,7 @@ GUARD_BODY_RADIUS = 0.35  # 扉を閉めてよいかの判定に使う、鬼の�
 
 def body_cells(x, y, radius):
     """半径radiusの四角形が掛かっているセル。"""
-    return {world_to_cell(x + dx, y + dy) for dx in (-radius, radius) for dy in (-radius, radius)}
+    return {world_to_cell(cx, cy) for cx, cy in box_corners(x, y, radius)}
 
 
 class DevicesMixin:
@@ -86,9 +86,7 @@ class DevicesMixin:
         """走って乗ると遠くまで、忍び足だと近くまで音が届く。届いた鬼は、その場所を調べに来る（音の罠と同じ）。"""
         radius = FLOOR_RUN_RADIUS if not self.player.sneaking else FLOOR_SNEAK_RADIUS
         x, y = cell_center(cell)
-        for guard in self.guards:
-            if guard.distance_to(x, y) <= radius:
-                guard.hear_decoy(cell)
+        self.call_guards(x, y, radius, cell)
         self.floor_cooldowns[index] = FLOOR_COOLDOWN
         self.add_ring(x, y, radius, FLOOR_RING_COLOR, 0.35)
         self.play_sound("decoy_fire", 0.8 if radius >= FLOOR_RUN_RADIUS else 0.4)
@@ -105,10 +103,7 @@ class DevicesMixin:
                 self.camera_alarm(i, camera)
 
     def camera_alarm(self, index, camera):
-        cell = player_cell(self.player)
-        for guard in self.guards:
-            if guard.distance_to(camera.x, camera.y) <= CAMERA_CALL_RADIUS:
-                guard.hear_decoy(cell)
+        self.call_guards(camera.x, camera.y, CAMERA_CALL_RADIUS, player_cell(self.player))
         self.camera_cooldowns[index] = CAMERA_ALARM_COOLDOWN
         self.camera_alarm_timers[index] = CAMERA_ALARM_COOLDOWN
         self.camera_alarms += 1

@@ -3,7 +3,7 @@
 import math
 from collections import deque
 
-from .grid import world_to_cell
+from .grid import box_corners, world_to_cell
 from .layout import MAP_H, MAP_W, START_POCKET_DOORS
 from .mapgen import build_walls, open_neighbors, pocket_cells
 
@@ -48,8 +48,7 @@ class World:
 
     def is_fully_outside_safe_zone(self, x, y, radius):
         """体（半径radiusの四角形）が安全地帯にまったく掛かっていないか。"""
-        corners = ((-radius, -radius), (radius, -radius), (-radius, radius), (radius, radius))
-        return all(world_to_cell(x + dx, y + dy) not in self.safe_cells for dx, dy in corners)
+        return all(world_to_cell(cx, cy) not in self.safe_cells for cx, cy in box_corners(x, y, radius))
 
     def nearest_cells(self, start, count, exclude):
         """startから近い順に、鬼の歩ける床をcount個返す（excludeは除く）。"""
@@ -72,8 +71,7 @@ class World:
 
     def is_blocked(self, x, y, radius):
         """半径radiusの円（を囲む四角形）が壁に触れるか。"""
-        corners = ((-radius, -radius), (radius, -radius), (-radius, radius), (radius, radius))
-        return any(self.is_wall_at(x + dx, y + dy) for dx, dy in corners)
+        return any(self.is_wall_at(cx, cy) for cx, cy in box_corners(x, y, radius))
 
     def first_wall_distance(self, x, y, dx, dy, max_dist):
         """(x,y)から向き(dx,dy)（単位ベクトル）へ進み、最初に壁へ入るまでの距離を返す。

@@ -35,6 +35,13 @@ class HelperMixin:
             kinds.append("decoy")
         return kinds
 
+    def reset_helper_state(self):
+        """持っている数・マップに出ている箱・出現までの時間・出現のお知らせを、ゲームの始めの状態に戻す。"""
+        self.held = {kind: 0 for kind in HELPER_MAX_HELD}  # 持っているお助けアイテムの数
+        self.helper_pickups = {kind: None for kind in HELPER_MAX_HELD}  # マップに出ている箱のセル
+        self.helper_spawn_timers = {kind: HELPER_SPAWN_INTERVAL for kind in HELPER_MAX_HELD}
+        self.notice_timer = 0.0  # 0より大きい間、出現のお知らせをヒント欄に出す
+
     def clear_placed_decoys(self):
         for decoy in self.placed_decoys:
             decoy["np"].removeNode()
@@ -120,9 +127,7 @@ class HelperMixin:
         cell = decoy["cell"]
         x, y = cell_center(cell)
         radius = self.difficulty.decoy_radius
-        for guard in self.guards:
-            if guard.distance_to(x, y) <= radius:
-                guard.hear_decoy(cell)
+        self.call_guards(x, y, radius, cell)
         decoy["np"].removeNode()
         self.add_ring(x, y, radius, DECOY_RING_COLOR, 0.35)
         self.play_sound("decoy_fire")

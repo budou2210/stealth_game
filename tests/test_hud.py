@@ -101,3 +101,18 @@ def test_noise_range_setting_in_menu(game_class):
     assert off in game.menu_text.setText.call_args[0][0]
     game.poll_action_keys()  # 押しっぱなしでは切り替わらない
     assert not game.show_noise_range
+
+
+def test_exit_color_follows_collected_items(game_class):
+    """出口は、ゲームを始める前と集め終わる前は赤、全部集めたら緑（見た目の更新で変える）。"""
+    from stealth_game.theme import EXIT_CLOSED_COLOR, EXIT_OPEN_COLOR
+
+    game = game_class()
+    game.update_visuals(0.0)
+    assert game.exit_np.setColor.call_args.args == EXIT_CLOSED_COLOR, "始める前（アイテムの配置がない）は赤"
+    game.start_game(NORMAL)
+    game.update_visuals(0.0)
+    assert game.exit_np.setColor.call_args.args == EXIT_CLOSED_COLOR
+    game.items_collected = set(range(len(game.item_cells)))
+    game.update_visuals(0.0)
+    assert game.exit_np.setColor.call_args.args == EXIT_OPEN_COLOR
