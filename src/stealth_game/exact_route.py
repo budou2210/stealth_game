@@ -17,6 +17,14 @@
    間隔の半分以内）。候補の点からその弧に沿って本当の触れる点まで回り込み、本当の最短の道に乗り換えれば、
    長さは回り込みの往復の分しか増えない。なので「求めた長さ − 本当の最短の長さ ≤ 保証の幅」になる
    （弧の長さ θ·r の、8方向の移動での長さは、直線距離の最大 1.0824 倍）。
+
+下限（どう動かしても、これより少ないコマではクリアできない）について：
+ゲームの当たり判定は、斜めの1コマを「横に動く → 縦に動く」として、それぞれの行き先だけを調べる。なので斜めの1コマの
+まっすぐな線の途中は、壁の角を少しかすめることがある（体の大きさ0.3のままでは通れない線になる）。
+ただし線の途中の点は、どれもその前後の位置から縦横それぞれ 0.055 以内（1コマの斜めの移動 0.108 の半分）にある。
+前後の位置は体の大きさ0.3で通れるので、線の途中の点は「体の大きさ 0.3 − 0.055」なら必ず通れる。
+そこで下限は、体の大きさを STRICT_RADIUS（0.245）と見た地図で測る（実際に動いた道は、この地図では必ず通れる道なので、
+その長さ ≥ この地図での最短の長さ。1コマで進めるのは長さ 0.153 まで）。
 """
 
 import math
@@ -25,22 +33,23 @@ import time
 from .constants import ITEM_PICKUP_DISTANCE, PLAYER_RADIUS, PLAYER_RUN_SPEED
 from .grid import cell_center
 from .layout import EXIT_CELL, PLAYER_START
-from .route_graph import Graph, octile
+from .route_graph import Graph, Point, octile
 
 EXIT_DISTANCE = 0.9
 OCTILE_PER_EUCLID = 1.0824  # 直線距離 1 の、8方向の移動での長さの最大（22.5°の向き）
 EXACT_GAP = 1e-6  # 角の中継点を、太らせた壁からこれだけ離す（ほぼ0）
 INSIDE = 1e-6  # 候補の点は、拾える距離よりこれだけ内側に置く（拾えるのは「より近い」とき）
+STRICT_RADIUS = 0.245  # 下限を測るときの体の大きさ（0.3 − 斜めの1コマの半分 0.0542 より少し小さく）
 SAMPLES = 360  # 円の周に並べる候補の数（切れ目の点は別に足す）。360で保証の幅 約0.11（1コマ 0.153 より小さい）・1配置 約3秒
 
 _cache = {}
 
 
 class ExactMap:
-    """本当の大きさの地図と、角どうしの最短距離（とその道）。"""
+    """体の大きさ radius の地図と、角どうしの最短距離（とその道）。"""
 
-    def __init__(self, world):
-        self.graph = Graph(world, PLAYER_RADIUS, EXACT_GAP)
+    def __init__(self, world, radius=PLAYER_RADIUS):
+        self.graph = Graph(world, radius, EXACT_GAP)
         n = len(self.graph.corners)
         self.dist = []
         self.prev = []
@@ -57,10 +66,12 @@ class ExactMap:
         return out[::-1]
 
 
-def exact_map(world):
-    if id(world) not in _cache:
-        _cache[id(world)] = (world, ExactMap(world))
-    return _cache[id(world)][1]
+def exact_map(world, radius=PLAYER_RADIUS):
+    """地図は、マップと体の大きさの組ごとに1回だけ作る。"""
+    key = (id(world), radius)
+    if key not in _cache:
+        _cache[key] = (world, ExactMap(world, radius))
+    return _cache[key][1]
 
 
 def circle_samples(graph, cx, cy, radius, count):
@@ -103,12 +114,14 @@ def circle_samples(graph, cx, cy, radius, count):
     return points, widest
 
 
-def solve_exact(world, item_cells, order, samples=SAMPLES):
-    """順番 order（アイテムの番号の並び）での本当の最短の道。戻り値は辞書：
+def solve_exact(world, item_cells, order, samples=SAMPLES, radius=PLAYER_RADIUS):
+    """順番 order（アイテムの番号の並び）での、体の大きさ radius の地図の上の本当の最短の道。戻り値は辞書：
     length（求めた長さ）・slack（保証の幅：本当の最短の長さは length − slack 以上）・
-    touches（各目標の触れる点）・path（道の点の並び）・min_frames（この順番でのクリアのコマ数の下限）・seconds。"""
+    touches（各目標の触れる点）・path（道の点の並び）・seconds・
+    min_frames（length − slack を1コマの長さで割って切り上げた数。radius が STRICT_RADIUS のときだけ、
+    「この順番でのクリアのコマ数の下限」と言える）。"""
     started = time.perf_counter()
-    em = exact_map(world)
+    em = exact_map(world, radius)
     g = em.graph
     sx, sy = cell_center(PLAYER_START)
     targets = [cell_center(item_cells[i]) for i in order] + [cell_center(EXIT_CELL)]
@@ -200,7 +213,49 @@ def solve_exact(world, item_cells, order, samples=SAMPLES):
         "slack": slack,
         "touches": touches,
         "path": path,
-        "min_frames": math.ceil((length - slack) / step - 1e-9),
+        "min_frames": frames_for(length - slack),
         "seconds": time.perf_counter() - started,
     }
 
+
+
+def frames_for(length):
+    """長さ length を進むのに要るコマ数の下限（1コマで進めるのは長さ 0.153 まで）。"""
+    return math.ceil(length / (PLAYER_RUN_SPEED * (1 / 30)) - 1e-9)
+
+
+def strict_lower_bound(world, item_cells, samples=72):
+    """どの順番で、どう動かしても、これより少ないコマではクリアできないコマ数（厳密な下限）。
+
+    体の大きさ STRICT_RADIUS の地図で、中心どうしの最短距離を測り、そこから「中心から円の周まで」の分を引いて、
+    一番短い順番を動的計画法で求める（ghost.solve_order）。円に触れる点を b とすると、
+    b どうしの距離 ≥ 中心どうしの距離 − (中心 → b の距離) × 2 なので、中心 → 周の距離の最大 R を引けばよい。
+    R は周の上の候補の点で測り、候補の間の分（弧に沿って回り込む分）を足して、取りこぼしのないようにする。
+    戻り値は (コマ数, 計算の秒数)。"""
+    from .ghost import solve_order  # ghost が exact_route を使う形にはしていないので、ここで読み込む
+
+    started = time.perf_counter()
+    g = exact_map(world, STRICT_RADIUS).graph
+    centers_xy = [cell_center(c) for c in item_cells] + [cell_center(EXIT_CELL)]
+    radii = [ITEM_PICKUP_DISTANCE] * len(item_cells) + [EXIT_DISTANCE]
+    centers = [Point(g, x, y) for x, y in centers_xy]
+    start = Point(g, *cell_center(PLAYER_START))
+    reach = []
+    for center, rad in zip(centers, radii):
+        points, widest = circle_samples(g, center.x, center.y, rad, samples)
+        far = 0.0
+        for x, y in points:
+            if g.segment_free(center.x, center.y, x, y):
+                d = octile(center.x, center.y, x, y)
+            else:
+                d = center.distance_to(g, Point(g, x, y))[0]
+            far = max(far, d)
+        reach.append(far + OCTILE_PER_EUCLID * rad * widest / 2)
+    n = len(item_cells)
+    items, exit_point = centers[:n], centers[n]
+    start_to_item = [max(0.0, start.distance_to(g, c)[0] - reach[j]) for j, c in enumerate(items)]
+    item_to_item = [[max(0.0, a.distance_to(g, b)[0] - reach[i] - reach[j]) for j, b in enumerate(items)]
+                    for i, a in enumerate(items)]
+    item_to_exit = [max(0.0, c.distance_to(g, exit_point)[0] - reach[i] - reach[n]) for i, c in enumerate(items)]
+    _, shortest = solve_order(start_to_item, item_to_item, item_to_exit)
+    return frames_for(shortest), time.perf_counter() - started

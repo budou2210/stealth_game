@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 
 from stealth_game.difficulty import TIME_ATTACK
-from stealth_game.exact_route import SAMPLES, solve_exact
+from stealth_game.exact_route import SAMPLES, STRICT_RADIUS, solve_exact, strict_lower_bound
 from stealth_game.ghost import DIRECTIONS, best_run, drive_through, keys_of
 from stealth_game.world import World
 
@@ -26,6 +26,7 @@ from .levels import RESULTS_ROOT
 from .planner import decode_keys, encode_keys
 from .sim import DT, Sim
 
+DEFAULT_CUTOFF = 24.5  # 足切りの秒数の初期値。2000配置の厳密な下限で、24.5秒未満が24.3%（上位20〜30%を残す）。README の「足切り」
 CHECKPOINT_EVERY = 15  # 仕上げで取っておく途中の状態の間隔（コマ）
 RESULTS = RESULTS_ROOT / "time_attack"
 
@@ -121,46 +122,57 @@ def refine(seed, world, log, seconds, rng):
 
 
 # --- まとめ ---------------------------------------------------------------------
-def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exact_samples=SAMPLES):
+def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exact_samples=SAMPLES, cutoff=None):
     """種 seed の配置を解く（道と動かし方は stealth_game/ghost.py のゴーストと同じ）。戻り値は結果の辞書（入力の記録つき）。
 
-    exact_samples > 0 のとき、選んだ順番での本当の最短の道（stealth_game/exact_route.py。保証の幅つき）を求め、
-    その触れる点でも動かして速いほうを残す。あわせて「この順番でのクリアのコマ数の下限」を出す。"""
+    - はじめに、どの順番でどう動かしても越えられない厳密な下限（exact_route.strict_lower_bound。約0.01秒）を出す。
+      cutoff（秒）を渡すと、下限が cutoff 以上の配置は、ここで打ち切る（outcome "cut"）。
+    - 動かした結果が cutoff 以上なら、仕上げと「選んだ順番での最短の道」の計算も省く（outcome は "win" のまま）。
+    - exact_samples > 0 のとき、選んだ順番での最短の道（体の大きさ0.3。保証の幅つき）を求めてその触れる点でも動かし、
+      速いほうを残す。あわせて、体の大きさ STRICT_RADIUS の地図で「この順番でのクリアのコマ数の下限」を出す。"""
     started = time.perf_counter()
     world = world or World()
     item_cells = Sim(seed, cfg=TIME_ATTACK, world=world).item_cells  # 本物と同じ乱数の使い方で配置を作る
+    bound_frames, _ = strict_lower_bound(world, item_cells)
+    result = {"seed": seed, "lower_bound": round(bound_frames * DT, 4), "lower_bound_frames": bound_frames,
+              "time": None, "driven_time": None, "order": None, "candidates": 0, "plan_seconds": 0.0,
+              "exact_length": None, "exact_slack": None, "min_frames": None, "frames": None, "keys": []}
+    if cutoff is not None and bound_frames * DT >= cutoff:
+        result.update(outcome="cut", total_seconds=round(time.perf_counter() - started, 3))
+        return result
     run = best_run(world, item_cells, candidates, margin)
     best_time, best_log = run["time"], run["log"]
+    slow = cutoff is not None and best_time is not None and best_time >= cutoff
     exact = None
-    if best_log is not None and exact_samples > 0:
+    if best_log is not None and exact_samples > 0 and not slow:
         exact = solve_exact(world, item_cells, run["order"], exact_samples)
         t, log, _ = drive_through(world, item_cells, run["order"], exact["touches"])
         if t is not None and t < best_time:
             best_time, best_log = t, log
+        exact["min_frames"] = solve_exact(world, item_cells, run["order"], exact_samples, STRICT_RADIUS)["min_frames"]
     driven = best_time
-    if best_log is not None and refine_seconds > 0:
+    if best_log is not None and refine_seconds > 0 and not slow:
         best_log = refine(seed, world, best_log, refine_seconds, random.Random(seed))
         best_time = len(best_log) * DT
     win = best_log is not None
-    return {
-        "seed": seed,
-        "outcome": "win" if win else "fail",
-        "time": round(best_time, 4) if win else None,
-        "driven_time": round(driven, 4) if win else None,  # 仕上げの前のタイム
-        "lower_bound": round(run["lower_bound"], 4),
-        "order": run["order"],
-        "distance": round(run["distance"], 3),
-        "candidates": run["candidates"],
-        "plan_seconds": round(run["plan_seconds"], 4),
-        "total_seconds": round(time.perf_counter() - started, 3),
-        # 選んだ順番での本当の最短の道の長さ（保証の幅 slack：本当の最短は length − slack 以上）と、コマ数の下限
-        "exact_length": round(exact["length"], 4) if exact else None,
-        "exact_slack": round(exact["slack"], 4) if exact else None,
-        "min_frames": exact["min_frames"] if exact else None,
-        "frames": len(best_log) if win else None,
-        "exact_seconds": round(exact["seconds"], 2) if exact else None,
-        "keys": encode_keys(best_log) if win else [],
-    }
+    result.update(
+        outcome="win" if win else "fail",
+        slow=slow,  # 動かした結果が cutoff 以上だったので、仕上げなどを省いた
+        time=round(best_time, 4) if win else None,
+        driven_time=round(driven, 4) if win else None,  # 仕上げの前のタイム
+        order=run["order"],
+        candidates=run["candidates"],
+        plan_seconds=round(run["plan_seconds"], 4),
+        total_seconds=round(time.perf_counter() - started, 3),
+        # 選んだ順番での最短の道の長さ（体の大きさ0.3。保証の幅 slack：本当の最短は length − slack 以上）と、
+        # この順番でのクリアのコマ数の下限（体の大きさ STRICT_RADIUS の地図で測った厳密な値）
+        exact_length=round(exact["length"], 4) if exact else None,
+        exact_slack=round(exact["slack"], 4) if exact else None,
+        min_frames=exact["min_frames"] if exact else None,
+        frames=len(best_log) if win else None,
+        keys=encode_keys(best_log) if win else [],
+    )
+    return result
 
 
 def replay_time(seed, keys, world=None):
@@ -205,33 +217,40 @@ def main():
     parser.add_argument("--margin", type=float, default=0.08, help="最短の距離から何割増しまでの順番を候補にするか")
     parser.add_argument("--refine-seconds", type=float, default=3.0, help="仕上げ（入力をずらして縮める）に使う秒数。0でしない")
     parser.add_argument("--exact-samples", type=int, default=SAMPLES,
-                        help="選んだ順番の本当の最短の道を求めるときの、円の周の候補の数（多いほど保証の幅が小さく、遅い）。0でしない")
+                        help="選んだ順番の最短の道を求めるときの、円の周の候補の数（多いほど保証の幅が小さく、遅い）。0でしない")
+    parser.add_argument("--cutoff", type=float, default=DEFAULT_CUTOFF,
+                        help=f"足切りの秒数。厳密な下限がこれ以上の配置は計算しない（初期値 {DEFAULT_CUTOFF}）。0で足切りしない")
     parser.add_argument("--results", type=Path, default=RESULTS, help="結果のフォルダ")
     args = parser.parse_args()
     seeds = parse_seeds(args.seeds) if args.seeds else [args.seed if args.seed is not None else 0]
+    cutoff = args.cutoff if args.cutoff > 0 else None
     world = World()
-    times = []
+    times, cut = [], 0
     for seed in seeds:
-        r = solve(seed, args.candidates, args.margin, args.refine_seconds, world, args.exact_samples)
+        r = solve(seed, args.candidates, args.margin, args.refine_seconds, world, args.exact_samples, cutoff)
+        if r["outcome"] == "cut":
+            cut += 1
+            print(f"種 {seed}: 足切り（下限 {r['lower_bound']:.2f}秒）")
+            continue
         saved = save(r, args.results)
-        if r["outcome"] == "win":
-            times.append((r["time"], seed, r["lower_bound"]))
-            gap = (r["time"] / r["lower_bound"] - 1) * 100
-            exact = ""
-            if r["min_frames"] is not None:
-                exact = (f"  この順番の最短の道 {r['exact_length']:.3f}（保証の幅 {r['exact_slack']:.3f}）→ "
-                         f"最少 {r['min_frames']}コマ・ボット {r['frames']}コマ（差 {r['frames'] - r['min_frames']}コマ）")
-            print(f"種 {seed}: {r['time']:.2f}秒（仕上げ前 {r['driven_time']:.2f}秒・下限の目安 {r['lower_bound']:.2f}秒・"
-                  f"差 {gap:.1f}%）  順番 {r['order']}{exact}  候補 {r['candidates']}本  "
-                  f"計画 {r['plan_seconds']}秒・全体 {r['total_seconds']}秒{'  （保存）' if saved else ''}")
-        else:
+        if r["outcome"] != "win":
             print(f"種 {seed}: クリアできず  候補 {r['candidates']}本")
-    if len(times) > 1:
-        avg = sum(t for t, _, _ in times) / len(times)
-        avg_lb = sum(lb for _, _, lb in times) / len(times)
+            continue
+        times.append((r["time"], seed))
+        detail = ""
+        if r["min_frames"] is not None:
+            detail = (f"  この順番の最短の道 {r['exact_length']:.3f}（保証の幅 {r['exact_slack']:.3f}）・"
+                      f"この順番の下限 {r['min_frames']}コマ・ボット {r['frames']}コマ（差 {r['frames'] - r['min_frames']}コマ）")
+        if r["slow"]:
+            detail = f"  （{cutoff:.2f}秒以上なので、仕上げなどは省略）"
+        print(f"種 {seed}: {r['time']:.2f}秒（仕上げ前 {r['driven_time']:.2f}秒・下限 {r['lower_bound']:.2f}秒）"
+              f"  順番 {r['order']}{detail}  全体 {r['total_seconds']}秒{'  （保存）' if saved else ''}")
+    summary = f"足切り {cut}/{len(seeds)}"
+    if times:
         best = min(times)
-        print(f"クリア {len(times)}/{len(seeds)}  平均 {avg:.2f}秒（下限の目安の平均 {avg_lb:.2f}秒）  "
-              f"最速 {best[0]:.2f}秒（種 {best[1]}）")
+        summary += (f"  クリア {len(times)}  平均 {sum(t for t, _ in times) / len(times):.2f}秒  "
+                    f"最速 {best[0]:.2f}秒（種 {best[1]}）")
+    print(summary)
 
 
 if __name__ == "__main__":

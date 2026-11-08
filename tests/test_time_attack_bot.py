@@ -86,11 +86,11 @@ def test_graph_distance_never_beats_straight_line():
 
 
 def test_refine_never_gets_slower_and_lower_bound_holds():
-    """仕上げで遅くならず、仕上げた記録も最初から流すと同じタイムでクリアする。下限の目安はタイムより短い。"""
+    """仕上げで遅くならず、仕上げた記録も最初から流すと同じタイムでクリアする。厳密な下限はタイム以下。"""
     world = World()
     result = solve(2, candidates=3, refine_seconds=0, world=world, exact_samples=0)
     log = decode_keys(result["keys"])
     better = refine(2, world, log, 1.0, random.Random(0))
     assert len(better) <= len(log)
     assert math.isclose(replay_time(2, encode_keys(better), world), len(better) / 30, abs_tol=1e-6)
-    assert result["lower_bound"] < result["time"]
+    assert result["lower_bound"] <= result["time"]

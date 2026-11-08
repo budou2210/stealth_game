@@ -5,7 +5,15 @@ import math
 
 from stealth_game.constants import ITEM_PICKUP_DISTANCE, PLAYER_RUN_SPEED
 from stealth_game.difficulty import TIME_ATTACK
-from stealth_game.exact_route import EXIT_DISTANCE, INSIDE, circle_samples, exact_map, solve_exact
+from stealth_game.exact_route import (
+    EXIT_DISTANCE,
+    INSIDE,
+    STRICT_RADIUS,
+    circle_samples,
+    exact_map,
+    solve_exact,
+    strict_lower_bound,
+)
 from stealth_game.grid import cell_center
 from stealth_game.layout import EXIT_CELL, PLAYER_START
 from stealth_game.route_graph import Point
@@ -91,3 +99,41 @@ def test_bot_never_beats_the_frame_lower_bound():
         for keys in decode_keys(result["keys"]):
             sim.step(keys)
         assert sim.state == "win"
+
+
+def test_every_frame_moves_along_a_line_free_for_the_strict_size():
+    """1コマの動きのまっすぐな線は、体の大きさ STRICT_RADIUS の地図ではいつも通れる（下限の前提）。
+    壁に沿って滑る動きや、角をかすめる斜めの動きを含むように、壁に向かって押し続ける入力も試す。"""
+    world = World()
+    graph = exact_map(world, STRICT_RADIUS).graph
+    result = solve(3, candidates=2, refine_seconds=0, world=world, exact_samples=0)
+    logs = [decode_keys(result["keys"])]
+    for keys in ({"up", "right"}, {"down", "right"}, {"up", "left"}, {"down", "left"}):
+        logs.append([frozenset({"right"})] * 40 + [frozenset(keys)] * 200 + [frozenset({"up"})] * 100)
+    for log in logs:
+        sim = Sim(3, cfg=TIME_ATTACK, world=world)
+        for keys in log:
+            x, y = sim.player.x, sim.player.y
+            sim.step(keys)
+            assert graph.segment_free(x, y, sim.player.x, sim.player.y)
+            if sim.done:
+                break
+
+
+def test_strict_lower_bound_is_below_the_bot_and_the_order_bound():
+    world = World()
+    for seed in (1, 4):
+        result = solve(seed, candidates=3, refine_seconds=0, world=world, exact_samples=120)
+        assert result["lower_bound_frames"] <= result["min_frames"] <= result["frames"]
+
+
+def test_cutoff_skips_slow_layouts():
+    """下限が足切りの秒数以上なら計算しない。動かした結果が足切り以上なら、仕上げなどを省く。"""
+    world = World()
+    frames, _ = strict_lower_bound(world, Sim(1, cfg=TIME_ATTACK, world=world).item_cells)
+    cut = solve(1, refine_seconds=0, world=world, exact_samples=0, cutoff=frames / 30)
+    assert cut["outcome"] == "cut" and cut["keys"] == []
+    slow = solve(1, refine_seconds=0, world=world, exact_samples=120, cutoff=frames / 30 + 0.01)
+    assert slow["outcome"] == "win" and slow["slow"] and slow["min_frames"] is None
+    fast = solve(1, refine_seconds=0, world=world, exact_samples=120, cutoff=99.0)
+    assert fast["outcome"] == "win" and not fast["slow"] and fast["min_frames"] is not None

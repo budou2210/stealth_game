@@ -12,7 +12,7 @@
    一番短くなる点を、1つずつ順に選び直して決める（数回くり返す）。
 4. 動かす：8方向のうち、目指す点までの距離が一番縮む向き（同じなら線から外れない向き）を1コマごとに選び、
    先の点が見通せたら手前の角を飛ばす。候補の順番を動かして一番速いものを残す（最速を超えたら打ち切る）。
-5. 下限：「これより速くはできない時間」の目安も出す（lower_bound）。
+5. 下限：どの順番でどう動かしても越えられない厳密な下限は exact_route.strict_lower_bound にある。
 """
 
 import math
@@ -30,7 +30,6 @@ EXIT_DISTANCE = 0.9  # 出口はこの距離まで近づけばよい（StealthGa
 TOUCH_MARGIN = 0.06  # 触れる点は、拾える距離よりこれだけ内側に置く
 TOUCH_ANGLES = 24  # 触れる点の候補（円の上の向きの数）
 TOUCH_ROUNDS = 3  # 触れる点を選び直すくり返しの数
-OCTILE_PER_EUCLID = 1.0824  # 同じ直線距離で、オクタイル距離が一番長くなる向き（22.5°）での比 cos + (√2-1)·sin
 DIRECTIONS = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if dx or dy]
 MAX_FRAMES = 3600  # 1回の動かしの上限（120秒）
 
@@ -104,18 +103,6 @@ def near_best_orders(cost, start_to_item, item_to_item, limit, count):
     walk([], None, full, 0.0)
     found.sort()
     return found[:count]
-
-
-def lower_bound(start_to_item, item_to_item, item_to_exit):
-    """「これより速くはできない」移動距離の目安。中心どうしの最短距離から、触れればよい円の分を引いて
-    （円の中の直線距離 r は、8方向の移動では最大 1.0824·r）、同じ動的計画法で一番短い順番を求める。
-    壁が円にかかっていると円の中でも回り道になるので、厳密な下限ではなく目安。"""
-    k = OCTILE_PER_EUCLID
-    item, ex = ITEM_PICKUP_DISTANCE * k, EXIT_DISTANCE * k
-    s = [max(0.0, d - item) for d in start_to_item]
-    m = [[max(0.0, d - 2 * item) for d in row] for row in item_to_item]
-    e = [max(0.0, d - item - ex) for d in item_to_exit]
-    return solve_order(s, m, e)[1]
 
 
 # --- 触れる点と道 ------------------------------------------------------------
@@ -319,15 +306,13 @@ def drive_through(world, item_cells, order, touches):
 
 def best_run(world, item_cells, candidates=10, margin=0.08):
     """配置 item_cells を解く。戻り値は辞書：time（クリアの秒数。解けなければ None）・order・log・poses・
-    distance（地図の上の最短距離）・lower_bound（下限の目安の秒数）・plan_seconds（道と順番の計算の秒数）・candidates。"""
+    distance（地図の上の最短距離）・plan_seconds（道と順番の計算の秒数）・candidates。"""
     started = time.perf_counter()
     graph = graph_for(world)
     xys = (cell_center(PLAYER_START), [cell_center(c) for c in item_cells], cell_center(EXIT_CELL))
     (start, centers, exit_point), legs = leg_distances(graph, *xys)
     cost, shortest = solve_order(*legs)
     orders = near_best_orders(cost, legs[0], legs[1], shortest * (1 + margin), candidates)
-    # 下限の目安は、体の本当の大きさ（壁にぎりぎりまで寄れる）の地図で測る
-    bound = lower_bound(*leg_distances(graph_for(world, PLAYER_RADIUS), *xys)[1]) / PLAYER_RUN_SPEED
     plan_seconds = time.perf_counter() - started
     best = {"time": None, "order": None, "log": None, "poses": None}
     cache = {}
@@ -336,7 +321,7 @@ def best_run(world, item_cells, candidates=10, margin=0.08):
         t, log, poses = drive(graph, item_cells, route, keys, give_up=best["time"] or math.inf)
         if t is not None and (best["time"] is None or t < best["time"]):
             best = {"time": t, "order": order, "log": log, "poses": poses}
-    best.update(distance=shortest, lower_bound=bound, plan_seconds=plan_seconds, candidates=len(orders))
+    best.update(distance=shortest, plan_seconds=plan_seconds, candidates=len(orders))
     return best
 
 
