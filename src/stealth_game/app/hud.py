@@ -82,7 +82,7 @@ class HudMixin:
             align=TextNode.ARight, font=self.font,
         )
         self.menu_text = OnscreenText(
-            text="", pos=(0, 0.5), scale=0.040, fg=(1, 1, 1, 1),  # 難易度6つとタイムアタックが操作説明に重ならない大きさ
+            text="", pos=(0, 0.5), scale=0.038, fg=(1, 1, 1, 1),  # 難易度6つとタイムアタック（説明つき）が操作説明に重ならない大きさ
             shadow=(0, 0, 0, 1), bg=MENU_TEXT_BG, mayChange=True, font=self.font,
         )
 

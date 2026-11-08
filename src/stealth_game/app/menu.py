@@ -36,7 +36,7 @@ class MenuMixin:
                 best_label += self.text["replay_mark"]
             lines.append(f"{marker} {i + 1}. {self.level_name(cfg)}{self.lives_label(cfg)}{best_label}")
             desc = self.text[f"{cfg.key}_desc"]
-            if desc:  # 説明が空（タイムアタックの説明は保留中）なら行を出さない
+            if desc:  # 説明が空なら行を出さない
                 lines.append(desc)
             lines.append("")
         self.menu_text.setText("\n".join(lines))

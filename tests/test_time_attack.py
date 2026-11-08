@@ -99,3 +99,10 @@ def test_best_time_and_replay_are_saved(game_class):
     assert game.replay is not None and game.difficulty is TIME_ATTACK
     game.toggle_pause()
     assert game.state == "paused", "ベスト記録の再生は止められる"
+
+
+def test_menu_shows_time_attack_description(game_class):
+    game = game_class()
+    game.open_menu()
+    menu = game.menu_text.setText.call_args.args[0]
+    assert game.text["time_attack_desc"] and game.text["time_attack_desc"] in menu

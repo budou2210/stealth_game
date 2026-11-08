@@ -19,7 +19,7 @@ TEXTS = {
         "transcend": "超越",
         "transcend_desc": "人の限界を越えた先にある。全てを超越せよ。",
         "time_attack": "タイムアタック",
-        "time_attack_desc": "",  # 説明は保留中（空なら一覧に説明の行を出さない）
+        "time_attack_desc": "見張りはいない。敵は、時計の針だけ。",
         "time_attack_controls_move": "WASD/矢印: 移動",
         "time_attack_controls_system": "Tab: 視点切替  R: リスタート  M: 難易度  Esc: 終了",
         "ghost_replay_hint": "V: 今のプレイを再生（ボットのゴーストと一緒に）",
@@ -93,7 +93,7 @@ TEXTS = {
         "transcend": "Transcendence",
         "transcend_desc": "Rise above everything. Transcend it all.",
         "time_attack": "Time Attack",
-        "time_attack_desc": "",
+        "time_attack_desc": "No guards. Your only enemy is the clock.",
         "time_attack_controls_move": "WASD/Arrows: move",
         "time_attack_controls_system": "Tab: view  R: restart  M: difficulty  Esc: quit",
         "ghost_replay_hint": "V: watch this run (with the bot's ghost)",
