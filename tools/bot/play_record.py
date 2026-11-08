@@ -17,7 +17,7 @@ from pathlib import Path
 from panda3d.core import ClockObject
 
 from stealth_game.app.game import StealthGame
-from stealth_game.difficulty import DIFFICULTIES
+from stealth_game.difficulty import MENU_LEVELS
 from stealth_game.texts import TEXTS
 
 from .planner import decode_keys
@@ -64,7 +64,7 @@ class Replay(StealthGame):
         self.pending = 0.0
         self.finished_shown = False
         random.seed(self.record_seed)
-        self.start_game(next(cfg for cfg in DIFFICULTIES if cfg.key == self.record_level))
+        self.start_game(next(cfg for cfg in MENU_LEVELS if cfg.key == self.record_level))
 
     # --- ゲームの動きを、再生用に変える部分 -------------------------------
     def bind_events(self):

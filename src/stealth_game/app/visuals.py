@@ -381,6 +381,8 @@ class VisualsMixin:
     def noise_range_visible(self):
         """足音の範囲を出すか：設定がオンで、プレイ中に安全地帯の外を走っているときだけ。"""
         p = self.player
+        if self.difficulty.time_attack:  # 鬼がいないので足音の範囲は出さない
+            return False
         return self.show_noise_range and self.state == "play" and p.is_noisy() and not p.safe
 
     def noise_radii(self):

@@ -109,6 +109,8 @@ class StealthGame(
         self.taskMgr.add(self.update, "update")
 
     def make_guards(self, cfg):
+        if cfg.time_attack:  # タイムアタック：鬼を出さない
+            return []
         routes = build_guard_routes()
         spawns = build_wanderer_spawns() if cfg.wanderers else []
         guards = [Guard(self.world, cfg, route=route) for route in routes]
@@ -267,6 +269,9 @@ class StealthGame(
     def update_safe_zone(self):
         """安全地帯から完全に出たら扉を閉める。中にいる間は見つからない。"""
         p = self.player
+        if self.difficulty.time_attack:  # タイムアタック：扉は閉まらず、安全地帯もない
+            p.safe = False
+            return
         if not self.world.doors_closed and self.world.is_fully_outside_safe_zone(p.x, p.y, PLAYER_RADIUS):
             self.set_doors_closed(True)
             self.play_sound("door")
@@ -397,7 +402,12 @@ class StealthGame(
         self.message_text.setText(self.text["new_record"])
 
     def toggle_pause(self):
-        """P：プレイ中なら一時停止、一時停止中なら再開する。"""
+        """P：プレイ中なら一時停止、一時停止中なら再開する。
+
+        タイムアタックを遊んでいる間は止められない（ベスト記録の再生は止められる）。
+        """
+        if self.difficulty.time_attack and self.replay is None:
+            return
         if self.state == "play":
             self.state = "paused"
             self.message_text.setText(self.text["replay_paused" if self.replay is not None else "paused"])

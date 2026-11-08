@@ -10,7 +10,7 @@ import random
 
 from panda3d.core import ClockObject
 
-from ..difficulty import DIFFICULTIES
+from ..difficulty import MENU_LEVELS
 from ..replays import (
     HELD_KEYS,
     PRESS_KEYS,
@@ -76,7 +76,7 @@ class ReplayMixin:
         """メニューの V：選んでいる難易度のベスト記録を再生する。"""
         if self.state != "menu":
             return
-        cfg = DIFFICULTIES[self.menu_index]
+        cfg = MENU_LEVELS[self.menu_index]
         if not self.has_best_replay(cfg):
             self.play_sound("denied")
             return
@@ -90,7 +90,7 @@ class ReplayMixin:
         self.replay_inputs = None
         self.replay_pending = 0.0
         self.replay_ended = False
-        cfg = next(c for c in DIFFICULTIES if c.key == self.replay["difficulty"])
+        cfg = next(c for c in MENU_LEVELS if c.key == self.replay["difficulty"])
         random.setstate(self.replay["random_state"])
         self.start_game(cfg, random_state=self.replay["random_state"])
 

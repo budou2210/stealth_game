@@ -36,6 +36,9 @@ class Difficulty:
     cameras: bool = False  # 監視カメラを区画ごとに1台付けるか
     timed_doors: bool = False  # 境目の真ん中の扉を、時間で開け閉めするか
     noisy_floors: int = 0  # 鳴る床の数。0ならなし
+    # タイムアタック：鬼・お助けアイテム・仕掛け・安全地帯の扉・ライフ・警戒度メーターを使わず、
+    # アイテム8個を集めて出口までのタイムだけを競う。一時停止（P）もできない
+    time_attack: bool = False
 
 
 # 難易度の詳細（メニューには雰囲気だけの説明を出し、中身はここに書く）
@@ -182,4 +185,20 @@ TRANSCEND = replace(
 )
 
 DIFFICULTIES = [EASY, NORMAL, HARD, VERY_HARD, HELL, TRANSCEND]
+
+# タイムアタック：鬼もお助けアイテムも出さず、アイテム8個（配置は毎回ランダム）を集めて出口までのタイムを競う。
+# 鬼の数値は使わない（簡単のものをそのまま持つだけ）
+TIME_ATTACK = replace(
+    EASY,
+    key="time_attack",
+    wanderers=False,
+    lives=1,
+    decoy_radius=0.0,
+    cloak=False,
+    flash=False,
+    time_attack=True,
+)
+
+# 難易度選択の一覧に並べるもの（難易度6つの下にタイムアタック）
+MENU_LEVELS = DIFFICULTIES + [TIME_ATTACK]
 DEFAULT_DIFFICULTY_INDEX = 1  # メニューで最初に選ばれている難易度（普通）

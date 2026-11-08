@@ -82,14 +82,15 @@ class HudMixin:
             align=TextNode.ARight, font=self.font,
         )
         self.menu_text = OnscreenText(
-            text="", pos=(0, 0.5), scale=0.044, fg=(1, 1, 1, 1),  # 難易度6つが操作説明に重ならない大きさ
+            text="", pos=(0, 0.5), scale=0.040, fg=(1, 1, 1, 1),  # 難易度6つとタイムアタックが操作説明に重ならない大きさ
             shadow=(0, 0, 0, 1), bg=MENU_TEXT_BG, mayChange=True, font=self.font,
         )
 
     def set_play_hud_visible(self, visible):
         """プレイ中だけの表示（状態・ヒント・警戒度）。メニューでは隠して、難易度の一覧と重ならないようにする。"""
+        meter = not self.difficulty.time_attack  # タイムアタックは鬼がいないので警戒度メーターを出さない
         for node in (self.status_text, self.hint_text, self.alert_label, self.alert_bar):
-            if visible:
+            if visible and (meter or node not in (self.alert_label, self.alert_bar)):
                 node.show()
             else:
                 node.hide()
@@ -120,7 +121,7 @@ class HudMixin:
             self.pause_dim.show()
         else:
             self.pause_dim.hide()
-        top = max(guard.alert for guard in self.guards)
+        top = max((guard.alert for guard in self.guards), default=0.0)
         self.alert_bar["value"] = top
         self.alert_bar["barColor"] = (min(1.0, 0.3 + top), max(0.1, 0.9 - top), 0.2, 1)
 
@@ -128,6 +129,8 @@ class HudMixin:
         """操作説明。プレイ中はその難易度で使えるお助けアイテムだけ、メニューでは全種類を載せる。"""
         if self.replay is not None:
             return self.text["replay_controls"]
+        if self.state != "menu" and self.difficulty.time_attack:
+            return "  ".join([self.text["time_attack_controls_move"], self.text["time_attack_controls_system"]])
         kinds = list(HELPER_MAX_HELD) if self.state == "menu" else self.helper_kinds()
         parts = [self.text["controls_move"]]
         parts += [self.text[f"{kind}_controls"] for kind in kinds]
