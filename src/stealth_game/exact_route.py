@@ -30,7 +30,7 @@
 import math
 import time
 
-from .constants import ITEM_PICKUP_DISTANCE, PLAYER_RADIUS, PLAYER_RUN_SPEED
+from .constants import ITEM_PICKUP_DISTANCE, PLAYER_RADIUS, PLAYER_RUN_SPEED, SIM_DT
 from .grid import cell_center
 from .layout import EXIT_CELL, PLAYER_START
 from .route_graph import Graph, Point, octile
@@ -158,7 +158,6 @@ def solve_exact(world, item_cells, order, samples=SAMPLES, radius=PLAYER_RADIUS)
     route.reverse()
     k = OCTILE_PER_EUCLID
     slack = sum(2 * k * rad * w / 2 for rad, w in zip(radii[:-1], widest[:-1])) + k * radii[-1] * widest[-1] / 2
-    step = PLAYER_RUN_SPEED * (1 / 30)
     return {
         "order": list(order),
         "length": length,
@@ -266,7 +265,7 @@ class OrderScorer:
 
 def frames_for(length):
     """長さ length を進むのに要るコマ数の下限（1コマで進めるのは長さ 0.153 まで）。"""
-    return math.ceil(length / (PLAYER_RUN_SPEED * (1 / 30)) - 1e-9)
+    return math.ceil(length / (PLAYER_RUN_SPEED * SIM_DT) - 1e-9)
 
 
 def strict_lower_bound(world, item_cells, samples=72):

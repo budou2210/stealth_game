@@ -406,7 +406,7 @@ class Bot:
         known = {g.spawn: g.last_known for g in self.sim.guards}
         start_value = self.progress_value(self.sim, field, staging)
         beam = [root]
-        best_first, best_score = "hold", -math.inf
+        best_first = "hold"
         for _ in range(DEPTH):
             children = []
             for node in beam:
@@ -421,7 +421,7 @@ class Bot:
                 break
             children.sort(key=lambda c: c[0], reverse=True)
             beam = [c[2] for c in children[:BEAM]]
-            best_score, best_first = children[0][0], children[0][2].first
+            best_first = children[0][2].first
         return best_first
 
     def try_race(self, last_index):

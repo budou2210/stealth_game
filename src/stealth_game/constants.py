@@ -2,6 +2,9 @@
 
 import math
 
+# ボット・ゴーストのシミュレーションの1コマの秒数（ボットの記録も、この間隔で再生する）
+SIM_DT = 1 / 30
+
 PLAYER_RUN_SPEED = 4.6
 PLAYER_SNEAK_SPEED = 2.2
 PLAYER_RADIUS = 0.3

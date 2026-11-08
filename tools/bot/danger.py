@@ -10,7 +10,7 @@ from collections import deque
 
 from stealth_game.grid import manhattan
 from stealth_game.items import pick_item_cells
-from stealth_game.layout import EXIT_CELL, MAP_H, MAP_W, PLAYER_START
+from stealth_game.layout import EXIT_CELL, PLAYER_START
 
 from .options import enabled
 
@@ -92,9 +92,6 @@ class DangerMap:
             m.visits = {(x, y): n for x, y, n in data["visits"]}
             m.fails = {(x, y): n for x, y, n in data["fails"]}
         return m
-
-    def all_cells(self):
-        return [(x, y) for y in range(MAP_H) for x in range(MAP_W)]
 
 
 def layout_score(danger_map, item_cells, world=None):

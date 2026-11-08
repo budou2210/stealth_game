@@ -8,8 +8,6 @@
 
 import random
 
-from panda3d.core import ClockObject
-
 from ..difficulty import MENU_LEVELS
 from ..replays import (
     HELD_KEYS,

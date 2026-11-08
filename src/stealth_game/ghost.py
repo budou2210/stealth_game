@@ -19,13 +19,13 @@ import copy
 import math
 import time
 
-from .constants import ITEM_PICKUP_DISTANCE, PLAYER_RADIUS, PLAYER_RUN_SPEED
+from .constants import ITEM_PICKUP_DISTANCE, PLAYER_RADIUS, PLAYER_RUN_SPEED, SIM_DT
 from .grid import cell_center
 from .layout import EXIT_CELL, PLAYER_START
 from .player import Player
 from .route_graph import Graph, Point, octile, tangent
 
-DT = 1 / 30  # 1コマの秒数（攻略ボットの記録と同じ）
+DT = SIM_DT  # 1コマの秒数（攻略ボットの記録と同じ）
 
 EXIT_DISTANCE = 0.9  # 出口はこの距離まで近づけばよい（StealthGame.check_exit_reached）
 TOUCH_MARGIN = 0.06  # 触れる点は、拾える距離よりこれだけ内側に置く

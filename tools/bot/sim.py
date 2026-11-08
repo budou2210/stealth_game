@@ -9,7 +9,7 @@ import copy
 import random
 
 from stealth_game.app.game import StealthGame
-from stealth_game.constants import HELPER_MAX_HELD
+from stealth_game.constants import HELPER_MAX_HELD, SIM_DT
 from stealth_game.items import pick_item_cells
 from stealth_game.layout import PLAYER_START
 from stealth_game.player import Player
@@ -17,7 +17,7 @@ from stealth_game.world import World
 
 from .levels import level_cfg
 
-DT = 1 / 30  # 1コマの秒数。ボットも記録の再生もこの間隔で進める
+DT = SIM_DT  # 1コマの秒数。ボットも記録の再生もこの間隔で進める
 
 # StealthGame から借りる処理（Panda3Dの描画を使わないものだけ）
 BORROWED = [
