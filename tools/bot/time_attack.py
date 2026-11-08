@@ -26,7 +26,7 @@ from .levels import RESULTS_ROOT
 from .planner import decode_keys, encode_keys
 from .sim import DT, Sim
 
-DEFAULT_CUTOFF = 24.5  # 足切りの秒数の初期値。2000配置の厳密な下限で、24.5秒未満が24.3%（上位20〜30%を残す）。README の「足切り」
+DEFAULT_CUTOFF = 22.7  # 足切りの秒数の初期値。2000配置の厳密な下限で、22.7秒未満が7.5%（上位5〜10%を残す）。README の「足切り」
 CHECKPOINT_EVERY = 15  # 仕上げで取っておく途中の状態の間隔（コマ）
 RESULTS = RESULTS_ROOT / "time_attack"
 
@@ -127,9 +127,12 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
 
     - はじめに、どの順番でどう動かしても越えられない厳密な下限（exact_route.strict_lower_bound。約0.01秒）を出す。
       cutoff（秒）を渡すと、下限が cutoff 以上の配置は、ここで打ち切る（outcome "cut"）。
-    - 動かした結果が cutoff 以上なら、仕上げと「選んだ順番での最短の道」の計算も省く（outcome は "win" のまま）。
-    - exact_samples > 0 のとき、選んだ順番での最短の道（体の大きさ0.3。保証の幅つき）を求めてその触れる点でも動かし、
-      速いほうを残す。あわせて、体の大きさ STRICT_RADIUS の地図で「この順番でのクリアのコマ数の下限」を出す。"""
+    - 足切りを通った配置は、最後まで全部計算する（足切りを強くしたので、残るのは見込みのある配置だけ）。
+    - exact_samples > 0 のとき、ボットが実際に拾った順番での最短の道（体の大きさ0.3。保証の幅つき）を求めて、
+      その触れる点でも動かし、速いほうを残す。あわせて、体の大きさ STRICT_RADIUS の地図で
+      「その順番でのクリアのコマ数の下限」を出す。
+      順番は「計画した順番」ではなく「実際に拾った順番」を使う。計画した順番どおりに向かっても、途中で別のアイテムの
+      そばを通って先に拾うことがあり、そのときは計画した順番の下限は当てはまらないため。"""
     started = time.perf_counter()
     world = world or World()
     item_cells = Sim(seed, cfg=TIME_ATTACK, world=world).item_cells  # 本物と同じ乱数の使い方で配置を作る
@@ -142,25 +145,29 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
         return result
     run = best_run(world, item_cells, candidates, margin)
     best_time, best_log = run["time"], run["log"]
-    slow = cutoff is not None and best_time is not None and best_time >= cutoff
     exact = None
-    if best_log is not None and exact_samples > 0 and not slow:
-        exact = solve_exact(world, item_cells, run["order"], exact_samples)
-        t, log, _ = drive_through(world, item_cells, run["order"], exact["touches"])
+    if best_log is not None and exact_samples > 0:
+        picked = pickup_order(seed, world, best_log)
+        exact = solve_exact(world, item_cells, picked, exact_samples)
+        t, log, _ = drive_through(world, item_cells, picked, exact["touches"])
         if t is not None and t < best_time:
             best_time, best_log = t, log
-        exact["min_frames"] = solve_exact(world, item_cells, run["order"], exact_samples, STRICT_RADIUS)["min_frames"]
     driven = best_time
-    if best_log is not None and refine_seconds > 0 and not slow:
+    if best_log is not None and refine_seconds > 0:
         best_log = refine(seed, world, best_log, refine_seconds, random.Random(seed))
         best_time = len(best_log) * DT
     win = best_log is not None
+    picked = pickup_order(seed, world, best_log) if win else None
+    if exact is not None:
+        if picked != exact["order"]:
+            exact = solve_exact(world, item_cells, picked, exact_samples)  # 仕上げなどで拾う順番が変わった
+        exact["min_frames"] = solve_exact(world, item_cells, picked, exact_samples, STRICT_RADIUS)["min_frames"]
     result.update(
         outcome="win" if win else "fail",
-        slow=slow,  # 動かした結果が cutoff 以上だったので、仕上げなどを省いた
         time=round(best_time, 4) if win else None,
         driven_time=round(driven, 4) if win else None,  # 仕上げの前のタイム
-        order=run["order"],
+        order=picked,  # 実際に拾った順番
+        planned_order=run["order"],  # 計画した順番（途中で別のアイテムを先に拾うと、実際の順番と変わる）
         candidates=run["candidates"],
         plan_seconds=round(run["plan_seconds"], 4),
         total_seconds=round(time.perf_counter() - started, 3),
@@ -173,6 +180,19 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
         keys=encode_keys(best_log) if win else [],
     )
     return result
+
+
+def pickup_order(seed, world, log):
+    """入力の記録 log を流したとき、実際にアイテムを拾った順番。"""
+    sim = Sim(seed, cfg=TIME_ATTACK, world=world)
+    order = []
+    for keys in log:
+        before = set(sim.items_collected)
+        sim.step(keys)
+        order += sorted(sim.items_collected - before)
+        if sim.done:
+            break
+    return order
 
 
 def replay_time(seed, keys, world=None):
@@ -241,8 +261,6 @@ def main():
         if r["min_frames"] is not None:
             detail = (f"  この順番の最短の道 {r['exact_length']:.3f}（保証の幅 {r['exact_slack']:.3f}）・"
                       f"この順番の下限 {r['min_frames']}コマ・ボット {r['frames']}コマ（差 {r['frames'] - r['min_frames']}コマ）")
-        if r["slow"]:
-            detail = f"  （{cutoff:.2f}秒以上なので、仕上げなどは省略）"
         print(f"種 {seed}: {r['time']:.2f}秒（仕上げ前 {r['driven_time']:.2f}秒・下限 {r['lower_bound']:.2f}秒）"
               f"  順番 {r['order']}{detail}  全体 {r['total_seconds']}秒{'  （保存）' if saved else ''}")
     summary = f"足切り {cut}/{len(seeds)}"

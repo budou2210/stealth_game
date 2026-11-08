@@ -88,9 +88,10 @@ def test_slack_brackets_the_true_shortest():
 
 
 def test_bot_never_beats_the_frame_lower_bound():
-    """ボットの記録のコマ数は、その順番でのコマ数の下限以上で、記録は最初から流すとクリアする。"""
+    """ボットの記録のコマ数は、その順番でのコマ数の下限以上で、記録は最初から流すとクリアする。
+    種104は、計画では5→0の順なのに、途中で0のそばを通って先に拾う配置（実際に拾った順番で下限を測る）。"""
     world = World()
-    for seed in (0, 5):
+    for seed in (0, 5, 104):
         result = solve(seed, candidates=3, refine_seconds=0, world=world, exact_samples=120)
         assert result["outcome"] == "win"
         assert result["min_frames"] <= result["frames"]
@@ -128,12 +129,10 @@ def test_strict_lower_bound_is_below_the_bot_and_the_order_bound():
 
 
 def test_cutoff_skips_slow_layouts():
-    """下限が足切りの秒数以上なら計算しない。動かした結果が足切り以上なら、仕上げなどを省く。"""
+    """下限が足切りの秒数以上なら計算しない。足切りを通った配置は、最後まで全部計算する。"""
     world = World()
     frames, _ = strict_lower_bound(world, Sim(1, cfg=TIME_ATTACK, world=world).item_cells)
     cut = solve(1, refine_seconds=0, world=world, exact_samples=0, cutoff=frames / 30)
     assert cut["outcome"] == "cut" and cut["keys"] == []
-    slow = solve(1, refine_seconds=0, world=world, exact_samples=120, cutoff=frames / 30 + 0.01)
-    assert slow["outcome"] == "win" and slow["slow"] and slow["min_frames"] is None
-    fast = solve(1, refine_seconds=0, world=world, exact_samples=120, cutoff=99.0)
-    assert fast["outcome"] == "win" and not fast["slow"] and fast["min_frames"] is not None
+    passed = solve(1, refine_seconds=0, world=world, exact_samples=120, cutoff=frames / 30 + 0.01)
+    assert passed["outcome"] == "win" and passed["min_frames"] is not None, "ボットのタイムが足切り以上でも、最後まで計算する"

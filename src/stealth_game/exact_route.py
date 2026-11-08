@@ -209,6 +209,7 @@ def solve_exact(world, item_cells, order, samples=SAMPLES, radius=PLAYER_RADIUS)
     slack = sum(2 * k * rad * w / 2 for rad, w in zip(radii[:-1], widest[:-1])) + k * radii[-1] * widest[-1] / 2
     step = PLAYER_RUN_SPEED * (1 / 30)
     return {
+        "order": list(order),
         "length": length,
         "slack": slack,
         "touches": touches,
