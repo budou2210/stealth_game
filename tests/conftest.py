@@ -74,6 +74,8 @@ def game_class():
 
     # 警戒度メーターの位置は描画から求めるので、固定値にしておく
     StealthGame.alert_bar_top = lambda self: -0.8
+    # マップの壁の見た目の組み立ては、偽物の部品だと1回約1.6秒かかる（ゲームの決まりには関係しない）ので省く
+    StealthGame.build_level = lambda self: setattr(self, "level_np", MagicMock())
     yield StealthGame
     for name, module in saved.items():
         if module is None:

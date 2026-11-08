@@ -127,12 +127,14 @@ def refine(seed, world, log, seconds, rng):
 
 
 # --- まとめ ---------------------------------------------------------------------
-def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exact_samples=SAMPLES, cutoff=None):
+def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exact_samples=SAMPLES, cutoff=None,
+          order_pool=ORDER_POOL):
     """種 seed の配置を解く（道と動かし方は stealth_game/ghost.py のゴーストと同じ）。戻り値は結果の辞書（入力の記録つき）。
 
     - はじめに、どの順番でどう動かしても越えられない厳密な下限（exact_route.strict_lower_bound。約0.01秒）を出す。
       cutoff（秒）を渡すと、下限が cutoff 以上の配置は、ここで打ち切る（outcome "cut"）。
     - 足切りを通った配置は、最後まで全部計算する（足切りを強くしたので、残るのは見込みのある配置だけ）。
+    - order_pool：円に触れればよい前提の長さで比べる順番の数の上限（choose_orders）。0なら比べない（テストを軽くする用）。
     - exact_samples > 0 のとき、ボットが実際に拾った順番での最短の道（体の大きさ0.3。保証の幅つき）を求めて、
       その触れる点でも動かし、速いほうを残す。あわせて、体の大きさ STRICT_RADIUS の地図で
       「その順番でのクリアのコマ数の下限」を出す。
@@ -148,7 +150,7 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
     if cutoff is not None and bound_frames * DT >= cutoff:
         result.update(outcome="cut", total_seconds=round(time.perf_counter() - started, 3))
         return result
-    run = best_run(world, item_cells, orders=choose_orders(world, item_cells, candidates, margin))
+    run = best_run(world, item_cells, orders=choose_orders(world, item_cells, candidates, margin, order_pool))
     best_time, best_log = run["time"], run["log"]
     exact = None
     if best_log is not None and exact_samples > 0:
@@ -195,12 +197,15 @@ def solve(seed, candidates=10, margin=0.08, refine_seconds=3.0, world=None, exac
     return result
 
 
-def choose_orders(world, item_cells, candidates, margin):
-    """動かして比べる順番：中心どうしの距離で選んだ候補（今までどおり）と、円に触れればよい前提の長さで短い候補。"""
+def choose_orders(world, item_cells, candidates, margin, pool_size=ORDER_POOL):
+    """動かして比べる順番：中心どうしの距離で選んだ候補（今までどおり）と、円に触れればよい前提の長さで短い候補
+    （pool_size 本まで比べて、短い ORDER_TOP 本。pool_size が0なら比べない）。"""
     plain, _ = center_orders(world, item_cells, margin, candidates)
-    pool, _ = center_orders(world, item_cells, ORDER_MARGIN, ORDER_POOL)
-    scorer = OrderScorer(world, item_cells)
-    scored = sorted((scorer.length(order), order) for _, order in pool)
+    scored = []
+    if pool_size > 0:
+        pool, _ = center_orders(world, item_cells, ORDER_MARGIN, pool_size)
+        scorer = OrderScorer(world, item_cells)
+        scored = sorted((scorer.length(order), order) for _, order in pool)
     orders = []
     for order in [o for _, o in plain] + [o for _, o in scored[:ORDER_TOP]]:
         if order not in orders:

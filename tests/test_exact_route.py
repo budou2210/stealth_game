@@ -92,7 +92,7 @@ def test_bot_never_beats_the_frame_lower_bound():
     種104は、計画では5→0の順なのに、途中で0のそばを通って先に拾う配置（実際に拾った順番で下限を測る）。"""
     world = World()
     for seed in (0, 5, 104):
-        result = solve(seed, candidates=3, refine_seconds=0, world=world, exact_samples=120)
+        result = solve(seed, candidates=3, refine_seconds=0, world=world, exact_samples=120, order_pool=0)
         assert result["outcome"] == "win"
         assert result["min_frames"] <= result["frames"]
         assert result["exact_length"] - result["exact_slack"] <= result["frames"] * STEP + 1e-9
@@ -107,7 +107,7 @@ def test_every_frame_moves_along_a_line_free_for_the_strict_size():
     壁に沿って滑る動きや、角をかすめる斜めの動きを含むように、壁に向かって押し続ける入力も試す。"""
     world = World()
     graph = exact_map(world, STRICT_RADIUS).graph
-    result = solve(3, candidates=2, refine_seconds=0, world=world, exact_samples=0)
+    result = solve(3, candidates=2, refine_seconds=0, world=world, exact_samples=0, order_pool=0)
     logs = [decode_keys(result["keys"])]
     for keys in ({"up", "right"}, {"down", "right"}, {"up", "left"}, {"down", "left"}):
         logs.append([frozenset({"right"})] * 40 + [frozenset(keys)] * 200 + [frozenset({"up"})] * 100)
@@ -124,7 +124,7 @@ def test_every_frame_moves_along_a_line_free_for_the_strict_size():
 def test_strict_lower_bound_is_below_the_bot_and_the_order_bound():
     world = World()
     for seed in (1, 4):
-        result = solve(seed, candidates=3, refine_seconds=0, world=world, exact_samples=120)
+        result = solve(seed, candidates=3, refine_seconds=0, world=world, exact_samples=120, order_pool=0)
         assert result["lower_bound_frames"] <= result["min_frames"] <= result["frames"]
 
 
@@ -132,9 +132,9 @@ def test_cutoff_skips_slow_layouts():
     """下限が足切りの秒数以上なら計算しない。足切りを通った配置は、最後まで全部計算する。"""
     world = World()
     frames, _ = strict_lower_bound(world, Sim(1, cfg=TIME_ATTACK, world=world).item_cells)
-    cut = solve(1, refine_seconds=0, world=world, exact_samples=0, cutoff=frames / 30)
+    cut = solve(1, refine_seconds=0, world=world, exact_samples=0, cutoff=frames / 30, order_pool=0)
     assert cut["outcome"] == "cut" and cut["keys"] == []
-    passed = solve(1, refine_seconds=0, world=world, exact_samples=120, cutoff=frames / 30 + 0.01)
+    passed = solve(1, refine_seconds=0, world=world, exact_samples=120, cutoff=frames / 30 + 0.01, order_pool=0)
     assert passed["outcome"] == "win" and passed["min_frames"] is not None, "ボットのタイムが足切り以上でも、最後まで計算する"
 
 
