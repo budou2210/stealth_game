@@ -182,7 +182,8 @@ class AudioMixin:
         self.bgm_playing = True
 
     def reset_audio(self):
-        """新しいゲーム（やり直し・難易度選択）の始まり。ジングルを止め、潜入の曲は頭から流す。"""
+        """新しいゲーム（やり直し・難易度選択）の始まり。ジングルを止め、曲の続きの位置を忘れる。
+        潜入の曲が流れている間にやり直したときは、曲を止めずにそのまま流し続ける（頭には戻らない）。"""
         self.stop_jingles()
         self.chase_bgm_timer = 0.0
         self.bgm_positions = {}
