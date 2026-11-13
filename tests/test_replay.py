@@ -1,5 +1,7 @@
 """ベスト記録のリプレイ（記録・保存・再生）のテスト。"""
 
+import gzip
+import json
 import random
 
 from stealth_game.difficulty import DIFFICULTIES, HARD, NORMAL
@@ -90,6 +92,32 @@ def test_broken_file_is_ignored(tmp_path):
     path.write_bytes(b"not a replay")
     assert load_replay(path) is None
     assert load_replay(tmp_path / "missing.json.gz") is None
+
+
+def test_broken_contents_are_ignored(game_class, tmp_path):
+    """形は読めても中身がおかしいリプレイは、落ちずに「ない」扱いにする。"""
+    game = recorded_game(game_class, frames=50)
+    path = tmp_path / "normal.json.gz"
+    save_replay(path, as_replay(game))
+    good = json.loads(gzip.decompress(path.read_bytes()))
+    n = len(good["dts"])
+    broken = [
+        [],  # 中身が辞書でない
+        dict(good, difficulty="no_such_level"),  # 今はない難易度
+        dict(good, random_state=[3, [1, 2], None]),  # 乱数の状態が使えない
+        dict(good, inputs=[[0, 10**12]]),  # とても大きなコマ数（広げる前に断る）
+        dict(good, inputs=[[0, n - 1]]),  # コマ数が合わない
+        dict(good, inputs=[["x", n]]),  # 入力が数でない
+        dict(good, dts=[-1.0] * n),  # 負の時間
+        dict(good, dts="abc"),  # 時間の長さがリストでない
+        dict(good, time=float("inf")),  # 無限大のクリアタイム
+    ]
+    for data in broken:
+        path.write_bytes(gzip.compress(json.dumps(data).encode("utf-8")))
+        assert load_replay(path) is None, data if not isinstance(data, dict) else data.keys()
+    raw = gzip.compress(json.dumps(good).encode("utf-8"))
+    path.write_bytes(raw[:10] + bytes(b ^ 0xFF for b in raw[10:-8]) + raw[-8:])  # 圧縮の中身が壊れている
+    assert load_replay(path) is None
 
 
 def test_replay_reproduces_the_play(game_class):

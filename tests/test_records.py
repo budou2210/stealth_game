@@ -17,6 +17,17 @@ def test_missing_or_broken_file_gives_empty(records_dir):
     assert load_records(path) == {}
 
 
+def test_broken_contents_are_ignored(records_dir):
+    """JSON として読めても中身がおかしい記録は、落ちずに使えるものだけ使う。"""
+    path = records_dir / "records.json"
+    records_dir.mkdir()
+    for text in ('{"best_times": []}', '{"best_times": "abc"}', "[1, 2]", "123"):
+        path.write_text(text, encoding="utf-8")
+        assert load_records(path) == {}
+    path.write_text('{"best_times": {"easy": true, "hard": 1e999, "normal": -5, "hell": 120.5}}', encoding="utf-8")
+    assert load_records(path) == {"hell": 120.5}  # True・無限大・負の数は使わない
+
+
 def test_save_and_load_round_trip(records_dir):
     path = records_dir / "records.json"
     assert save_records(path, {"hard": 283.6, "easy": 95.25})

@@ -9,8 +9,12 @@
 
 import gzip
 import json
+import math
+import random
+import zlib
 from pathlib import Path
 
+from .difficulty import MENU_LEVELS
 from .records import data_dir
 
 REPLAY_VERSION = 1
@@ -53,17 +57,41 @@ def compress_codes(codes):
     return out
 
 
-def expand_codes(runs):
+def expand_codes(runs, total):
+    """compress_codes の逆。形が違う・コマ数の合計が total と合わないときは ValueError
+    （壊れたファイルで、とても大きなリストを作ってしまわないように、広げる前に確かめる）。"""
+    if not isinstance(runs, list):
+        raise ValueError("inputs")
+    for run in runs:
+        if not (isinstance(run, list) and len(run) == 2 and all(is_int(v) for v in run)):
+            raise ValueError("inputs")
+        if run[1] < 1 or not 0 <= run[0] < 1 << (len(HELD_KEYS) + len(PRESS_KEYS)):
+            raise ValueError("inputs")
+    if sum(count for _, count in runs) != total:
+        raise ValueError("inputs")
     codes = []
     for code, count in runs:
         codes.extend([code] * count)
     return codes
 
 
+def is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def to_seconds(v):
+    """0以上の有限の数を float にする。そうでなければ ValueError。"""
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0:
+        raise ValueError("seconds")
+    return float(v)
+
+
 def to_state(data):
     """JSON から読んだ乱数の状態（リスト）を random.setstate に渡せる形（タプル）に戻す。"""
     version, internal, gauss = data
-    return version, tuple(internal), gauss
+    state = version, tuple(internal), gauss
+    random.Random().setstate(state)  # 使えない形なら、再生を始めるときではなく、ここで ValueError か TypeError
+    return state
 
 
 def save_replay(path, replay):
@@ -90,18 +118,19 @@ def load_replay(path):
     """リプレイを読む。ファイルがない・壊れている・形式が違うときは None。"""
     try:
         data = json.loads(gzip.decompress(Path(path).read_bytes()).decode("utf-8"))
-        if data.get("version") != REPLAY_VERSION:
+        if not isinstance(data, dict) or data.get("version") != REPLAY_VERSION:
             return None
-        codes = expand_codes(data["inputs"])
-        dts = [float(dt) for dt in data["dts"]]
-        if len(codes) != len(dts):
+        if data["difficulty"] not in {cfg.key for cfg in MENU_LEVELS}:
+            return None  # 今はない難易度（再生を始めるときに落ちないように）
+        if not isinstance(data["dts"], list):
             return None
+        dts = [to_seconds(dt) for dt in data["dts"]]
         return {
             "difficulty": data["difficulty"],
-            "time": float(data["time"]),
+            "time": to_seconds(data["time"]),
             "random_state": to_state(data["random_state"]),
             "dts": dts,
-            "codes": codes,
+            "codes": expand_codes(data["inputs"], len(dts)),
         }
-    except (OSError, ValueError, KeyError, TypeError, EOFError):
+    except (OSError, ValueError, KeyError, TypeError, EOFError, zlib.error):  # zlib.error：圧縮の中身が壊れている
         return None

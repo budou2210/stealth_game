@@ -10,6 +10,7 @@
 """
 
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -50,7 +51,14 @@ def load_records(path):
     except (OSError, ValueError):
         return {}
     best = data.get("best_times", {}) if isinstance(data, dict) else {}
-    return {key: float(t) for key, t in best.items() if isinstance(t, (int, float)) and t > 0}
+    if not isinstance(best, dict):  # 中身が壊れていても落ちないように
+        return {}
+    return {key: float(t) for key, t in best.items() if isinstance(key, str) and is_valid_time(t)}
+
+
+def is_valid_time(t):
+    """ベストタイムとして使える数か（True/False・無限大・0以下は使わない）。"""
+    return isinstance(t, (int, float)) and not isinstance(t, bool) and math.isfinite(t) and t > 0
 
 
 def save_records(path, records):
